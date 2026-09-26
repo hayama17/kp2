@@ -8,38 +8,60 @@ Think of it as a minimal, local-only Instruqt / Killercoda (MVP).
 
 ```
 Browser
-  Markdown ──Run──▶ xterm.js ──WebSocket (/ws, proxied by Vite)──▶ ttyd ──▶ PTY ──▶ $SHELL
+  Markdown ──Run──▶ xterm.js ──WebSocket /ws──▶ kp2 (Rust) ──▶ PTY ──▶ $SHELL
+                                                 │
+                                                 └─ code-server (optional) ──▶ browser-based VS Code
 ```
+
+The backend is a single Rust binary, `kp2` (`server/`). It speaks the same WebSocket protocol as ttyd, so the xterm.js client on the frontend is unchanged.
 
 ## Requirements
 
-- Node.js 20 or later
-- [ttyd](https://github.com/tsl0922/ttyd) 1.7 or later (macOS: `brew install ttyd`)
+- Node.js 20 or later (to build and develop the frontend)
+- Rust (stable)
 - Optional: [code-server](https://github.com/coder/code-server) (macOS: `brew install code-server`). When installed, a browser-based VS Code pane becomes available
 
 ## Getting started
+
+### Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` starts the following three processes together.
+`npm run dev` starts the following two processes together.
 
 | Process | Bind address | Role |
 | --- | --- | --- |
-| ttyd (`scripts/ttyd.sh`) | `127.0.0.1:7681` | PTY and shell (picks `$SHELL`, then `/bin/zsh`, then `/bin/bash`) |
-| code-server (`scripts/code-server.sh`) | `127.0.0.1:7682` | Browser-based VS Code. Skipped when not installed, in which case the editor pane is not shown |
-| Vite dev server | `127.0.0.1:5173` | Serves the React UI. Proxies `/ws` and `/token` to ttyd and `/code` to code-server |
+| kp2 (`cargo run`) | `127.0.0.1:7681` | PTY and shell, the runbook and favorites APIs, starting code-server |
+| Vite dev server | `127.0.0.1:5173` | Serves the React UI. Proxies `/ws`, `/token` and `/api` to kp2 |
 
 Open <http://127.0.0.1:5173/> in your browser.
 
-To try a production build, run `npm run build && npm start` (Vite preview + ttyd, same port layout). Live reload of runbooks does not work in preview mode.
+### Running the single binary
+
+```bash
+npm run build   # tsc + vite build + cargo build --release
+npm start       # = server/target/release/kp2
+```
+
+`kp2` embeds the built UI, so it serves <http://127.0.0.1:5173/> without Node or Vite.
+
+```
+kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 7682]
+```
+
+- `--docs`: the default runbook folder (env: `DOCS_DIR`)
+- `--workspace`: the folder the terminal starts in and code-server opens (env: `KP2_WORKSPACE`)
+- `--no-editor`: do not start code-server even when it is installed
+
+The shell is chosen in the order `$SHELL`, `/bin/zsh`, `/bin/bash` and started as a login shell.
 
 ## Runbooks
 
 By default, kp2 loads `docs/*.md` from the repository, starting with `docs/getting-started.md`.
-The server reads the Markdown at request time, so editing a file updates only the left pane immediately while the terminal keeps running.
+The server reads the Markdown at request time and pushes changes over server-sent events, so editing a file updates only the left pane immediately while the terminal keeps running.
 
 ### Opening runbooks from another directory
 
@@ -49,7 +71,7 @@ You can point kp2 at any directory outside the repository in three ways.
    `.md` files in subdirectories are listed recursively. Recently opened folders appear in the same panel, and the last location is restored on the next start.
 2. **Choose folder…** (Chrome / Edge only): pick a folder with the OS folder dialog from the same panel. In this mode the browser reads the files directly and
    the server is not involved. Changes are detected by polling every 2 seconds. After a reload, press **Re-open** to regain access (a browser permission rule).
-3. **At startup**: `DOCS_DIR=~/notes npm run dev` changes the default directory. Appending `?dir=<path>` to the URL does the same.
+3. **At startup**: `kp2 --docs ~/notes` (or `DOCS_DIR=~/notes npm run dev`) changes the default directory. Appending `?dir=<path>` to the URL does the same.
 
 ### Favorites (Pinned)
 
@@ -95,8 +117,8 @@ Blocks whose language is `bash` / `sh` / `shell` additionally get these two butt
 
 ## Editor (code-server)
 
-When code-server is running, an **Editor** button appears at the right end of the header. Pressing it splits the right pane vertically, with browser-based VS Code on top and the terminal below (drag the divider to resize). Press it again to hide the editor. It is hidden by default, and your choice is remembered by the browser. Clicking a `vscode:` link in a runbook shows the editor automatically. The pencil icon next to the runbook name in the header opens the runbook itself in VS Code; saving updates the left pane immediately.
-The folder VS Code opens (the workspace) defaults to the repository root and can be changed with `KP2_WORKSPACE=~/src/myproject npm run dev`.
+When code-server is installed, kp2 starts it as a child process and an **Editor** button appears at the right end of the header. Pressing it splits the right pane vertically, with browser-based VS Code on top and the terminal below (drag the divider to resize). Press it again to hide the editor. It is hidden by default, and your choice is remembered by the browser. Clicking a `vscode:` link in a runbook shows the editor automatically. The pencil icon next to the runbook name in the header opens the runbook itself in VS Code; saving updates the left pane immediately.
+The folder VS Code opens (the workspace) defaults to the directory kp2 was started in (the repository root under `npm run dev`) and can be changed with `kp2 --workspace ~/src/myproject` or `KP2_WORKSPACE=~/src/myproject npm run dev`.
 The terminal and the editor see the same local filesystem, so "read the runbook → edit in the editor → Run → check the result in the terminal" all happens inside the browser.
 
 To open a file from a runbook, write a `vscode:` link. The path is relative to the workspace, and `#L<line>` jumps to a line.
@@ -105,8 +127,10 @@ To open a file from a runbook, write a `vscode:` link. The path is relative to t
 [Open main.rs](vscode:src/main.rs#L120)
 ```
 
-Clicking it makes Vite's `/api/open` run `code-server -r`, which opens the file in the running VS Code instance (no page reload).
+Clicking it makes kp2's `/api/open` run `code-server -r`, which opens the file in the running VS Code instance (no page reload).
 When code-server is not running, an explanation is shown instead.
+
+The editor pane is an iframe that points at code-server's own origin (`http://127.0.0.1:7682/`), so the browser sees two origins: kp2 and code-server.
 
 code-server's user data lives in `~/.local/share/kp2/code-server` (or `$XDG_DATA_HOME/kp2/code-server`).
 The IPC socket that `code-server -r` uses to find the running instance is created there, so the path has to be short.
@@ -126,7 +150,8 @@ Drag the divider between the runbook on the left and the terminal on the right t
 
 This tool can run arbitrary commands on your local machine.
 
-- ttyd, code-server and Vite all bind to **127.0.0.1 only**. Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
+- kp2, code-server and Vite all bind to **127.0.0.1 only**. Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
+- The terminal WebSocket checks the `Origin` header and rejects connections from pages that are not served from localhost
 - What the Run button sends is exactly the content of the code block shown on screen. There are no hidden commands or transformations
 - Merely opening a Markdown file executes nothing. Execution always requires a button click or a keystroke
 - There is no authentication (MVP). Use it only in a trusted local environment
@@ -135,15 +160,17 @@ This tool can run arbitrary commands on your local machine.
 
 ```
 docs/getting-started.md   Runbook (Markdown, the default directory)
-scripts/ttyd.sh           Starts ttyd (localhost bind, shell selection)
-scripts/code-server.sh    Starts code-server (optional; does nothing when not installed)
-vite.config.ts            Localhost bind for the dev/preview server and the proxy to ttyd
-vite-docs-plugin.ts       Middleware that serves .md files from any directory and pushes changes over HMR
-vite-favorites-plugin.ts  Read/write API for favorites.json and change notifications
-vite-editor-plugin.ts     code-server health check (/api/editor) and the open-file API (/api/open)
+server/                   Rust backend (the single kp2 binary)
+  src/main.rs             CLI, routing, serving the embedded UI
+  src/pty.rs              PTY and WebSocket (ttyd-compatible protocol, Origin check)
+  src/docs.rs             Listing and reading .md files in any directory, folder watching
+  src/favorites.rs        Reading and writing favorites.json
+  src/editor.rs           Starting code-server, health check, the open-file API
+  src/events.rs           Server-sent events (/api/events)
+vite.config.ts            Localhost bind for the dev server and the proxy to kp2
 src/ttyd.ts               Minimal client for the ttyd WebSocket protocol
 src/TerminalPane.tsx      xterm.js + fit addon + resize/copy/paste
-src/Guide.tsx             Markdown rendering and the Run / Insert buttons
+src/Guide.tsx             Markdown rendering, the Copy / Insert / Run buttons and link handling
 src/docs.ts               Runbook store (server-backed and File System Access API), runbook selection, favorites
 src/DocsPicker.tsx        Folder / runbook selector in the header and the folder panel
 src/editor.ts             Editor availability, show/hide state, vscode: link handling
@@ -152,8 +179,9 @@ src/SplitPane.tsx         Vertical editor / terminal split (drag to change the r
 src/App.tsx               Two-pane layout
 ```
 
-## Why ttyd
+## About the backend
 
-ttyd's WebSocket protocol is very simple (the first byte is the command type: `'0'` = input, `'1'` = resize),
-so xterm.js can talk to it directly without ttyd's bundled web UI.
-That means kp2 does not have to manage PTYs, resizing or signals itself; the whole backend is a single ttyd process.
+The first MVP left PTY management to [ttyd](https://github.com/tsl0922/ttyd). ttyd's WebSocket protocol is very simple
+(the first byte is the command type: `'0'` = input, `'1'` = resize), so kp2 reimplements that protocol in Rust and keeps the
+frontend as it was, while the backend becomes a single binary. No external binary has to be installed any more, and kp2 can
+validate the connecting origin and manage sessions itself.
