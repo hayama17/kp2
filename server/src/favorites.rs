@@ -59,11 +59,21 @@ fn sanitize(raw: &[Value]) -> Option<Vec<Favorite>> {
     Some(out)
 }
 
+/// Read favorites.json. A missing file is an empty list; a file that exists but cannot be parsed
+/// is an error, never an empty list: the user edits this file by hand, and treating a typo as
+/// "no favorites" would let the next PUT silently overwrite everything they wrote.
 async fn read_file(file: &Path) -> Result<Vec<Favorite>, ApiError> {
     match tokio::fs::read_to_string(file).await {
         Ok(text) => {
-            let parsed: File = serde_json::from_str(&text).unwrap_or_default();
-            Ok(sanitize(&parsed.favorites).unwrap_or_default())
+            let parsed: File = serde_json::from_str(&text).map_err(|e| {
+                ApiError::internal(format!("{} is not valid JSON ({e}). Fix it by hand; kp2 will not overwrite it.", file.display()))
+            })?;
+            sanitize(&parsed.favorites).ok_or_else(|| {
+                ApiError::internal(format!(
+                    "{} has a malformed entry (each needs a non-empty \"dir\", and \"doc\" must be a .md name). Fix it by hand; kp2 will not overwrite it.",
+                    file.display()
+                ))
+            })
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(e) => Err(ApiError::internal(e)),
@@ -83,6 +93,9 @@ pub async fn put_all(State(state): State<Arc<AppState>>, Json(body): Json<Value>
     let raw = body.get("favorites").and_then(Value::as_array).ok_or_else(|| ApiError::bad("favorites must be [{ dir, doc?, label? }]"))?;
     let list = sanitize(raw).ok_or_else(|| ApiError::bad("favorites must be [{ dir, doc?, label? }]"))?;
     let file = &state.favorites_file;
+    // Refuse to replace a file we cannot read back: a hand-edited file with a syntax error must
+    // not be clobbered by whatever the UI currently believes the list is.
+    read_file(file).await?;
     if let Some(parent) = file.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(ApiError::internal)?;
     }
