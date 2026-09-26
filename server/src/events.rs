@@ -30,11 +30,14 @@ impl Hub {
 }
 
 pub async fn sse(State(state): State<Arc<crate::AppState>>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let stream = BroadcastStream::new(state.events.subscribe()).filter_map(|item| async move {
-        match item {
-            Ok(n) => Some(Ok(Event::default().event(n.event).data(n.data.to_string()))),
-            Err(_lagged) => None,
-        }
-    });
+    let stream = BroadcastStream::new(state.events.subscribe())
+        .filter_map(|item| async move {
+            match item {
+                Ok(n) => Some(Ok(Event::default().event(n.event).data(n.data.to_string()))),
+                Err(_lagged) => None,
+            }
+        })
+        // Close the stream when the server shuts down; the browser's EventSource reconnects on its own.
+        .take_until(state.shutdown.clone().cancelled_owned());
     Sse::new(stream).keep_alive(KeepAlive::default())
 }

@@ -69,15 +69,26 @@ pub async fn read(State(state): State<Arc<AppState>>, Query(q): Query<DirQuery>)
 }
 
 /// Watches document folders (recursively) and the favorites file, publishing to the event hub.
+///
+/// Paths are compared in canonical form: macOS FSEvents reports the real path (`/private/tmp/x`)
+/// even when the folder was opened through a symlink (`/tmp/x`), while inotify reports the path
+/// as it was watched. Events are published under the path the client asked for.
 pub struct Watcher {
     inner: Mutex<notify::RecommendedWatcher>,
-    watched: Arc<Mutex<HashMap<PathBuf, ()>>>,
+    /// Watched docs folders: path as given by the client -> canonical path.
+    watched: Arc<Mutex<HashMap<PathBuf, PathBuf>>>,
+    /// The favorites file as configured, and its canonical path.
+    favorites: Arc<Mutex<Option<(PathBuf, PathBuf)>>>,
+}
+
+fn canonical(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
 }
 
 impl Watcher {
     pub fn new(hub: Hub) -> notify::Result<Self> {
-        let watched: Arc<Mutex<HashMap<PathBuf, ()>>> = Arc::new(Mutex::new(HashMap::new()));
-        let favorites = Arc::new(Mutex::new(None::<PathBuf>));
+        let watched: Arc<Mutex<HashMap<PathBuf, PathBuf>>> = Arc::new(Mutex::new(HashMap::new()));
+        let favorites: Arc<Mutex<Option<(PathBuf, PathBuf)>>> = Arc::new(Mutex::new(None));
         let (watched_cb, favorites_cb) = (watched.clone(), favorites.clone());
         let inner = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(ev) = res else { return };
@@ -88,24 +99,22 @@ impl Watcher {
                 EventKind::Access(_) => return,
             };
             for path in &ev.paths {
-                if favorites_cb.lock().unwrap().as_deref() == Some(path.as_path()) {
+                let is_favorites = favorites_cb.lock().unwrap().as_ref().is_some_and(|(given, canon)| path == given || path == canon);
+                if is_favorites {
                     hub.send("favorites:changed", json!({}));
                     continue;
                 }
                 if path.extension().and_then(|e| e.to_str()) != Some("md") {
                     continue;
                 }
-                for dir in watched_cb.lock().unwrap().keys() {
-                    if let Ok(rel) = path.strip_prefix(dir) {
+                for (dir, canon) in watched_cb.lock().unwrap().iter() {
+                    if let Ok(rel) = path.strip_prefix(canon).or_else(|_| path.strip_prefix(dir)) {
                         hub.send("docs:changed", json!({ "dir": dir, "name": rel.to_string_lossy().replace('\\', "/"), "event": kind }));
                     }
                 }
             }
         })?;
-        let w = Self { inner: Mutex::new(inner), watched };
-        // Stash the favorites path holder inside the closure state via a second Arc.
-        FAVORITES_PATH.set(favorites).ok();
-        Ok(w)
+        Ok(Self { inner: Mutex::new(inner), watched, favorites })
     }
 
     pub fn watch_docs(&self, dir: &Path) {
@@ -117,20 +126,18 @@ impl Watcher {
             tracing::warn!("cannot watch {}: {e}", dir.display());
             return;
         }
-        watched.insert(dir.to_path_buf(), ());
+        watched.insert(dir.to_path_buf(), canonical(dir));
     }
 
     pub fn watch_favorites(&self, file: &Path) {
-        if let Some(holder) = FAVORITES_PATH.get() {
-            *holder.lock().unwrap() = Some(file.to_path_buf());
-        }
         if let Some(parent) = file.parent() {
             let _ = std::fs::create_dir_all(parent);
             if let Err(e) = self.inner.lock().unwrap().watch(parent, RecursiveMode::NonRecursive) {
                 tracing::warn!("cannot watch {}: {e}", parent.display());
             }
+            // The file itself may not exist yet, so canonicalize the directory and re-append the name.
+            let canon = file.file_name().map(|n| canonical(parent).join(n)).unwrap_or_else(|| file.to_path_buf());
+            *self.favorites.lock().unwrap() = Some((file.to_path_buf(), canon));
         }
     }
 }
-
-static FAVORITES_PATH: std::sync::OnceLock<Arc<Mutex<Option<PathBuf>>>> = std::sync::OnceLock::new();

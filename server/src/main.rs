@@ -24,6 +24,7 @@ use axum::{
 use clap::Parser;
 use rust_embed::RustEmbed;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
 #[command(name = "kp2", about = "Markdown guide + browser terminal + editor, from one local binary")]
@@ -56,6 +57,9 @@ pub struct AppState {
     pub editor: editor::Editor,
     pub events: events::Hub,
     pub watcher: docs::Watcher,
+    /// Cancelled when the server is shutting down; long-lived responses (SSE) end on it so
+    /// graceful shutdown does not wait for them forever.
+    pub shutdown: CancellationToken,
 }
 
 #[tokio::main]
@@ -71,7 +75,15 @@ async fn main() {
     watcher.watch_favorites(&favorites_file);
     let editor = editor::Editor::start(cli.editor_port, &workspace, !cli.no_editor).await;
 
-    let state = Arc::new(AppState { docs_default: docs_default.clone(), workspace: workspace.clone(), favorites_file: favorites_file.clone(), editor, events, watcher });
+    let state = Arc::new(AppState {
+        docs_default: docs_default.clone(),
+        workspace: workspace.clone(),
+        favorites_file: favorites_file.clone(),
+        editor,
+        events,
+        watcher,
+        shutdown: CancellationToken::new(),
+    });
 
     let app = Router::new()
         .route("/token", get(pty::token))
@@ -109,6 +121,9 @@ async fn shutdown(state: Arc<AppState>) {
         let _ = ctrl_c.await;
     }
     tracing::info!("shutting down");
+    // End the open SSE streams: with_graceful_shutdown waits for in-flight responses, and
+    // an EventSource connection would otherwise keep the process alive until the tab closes.
+    state.shutdown.cancel();
     state.editor.stop().await;
 }
 
@@ -116,10 +131,16 @@ async fn shutdown(state: Arc<AppState>) {
 async fn static_handler(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
-    let file = Assets::get(path).or_else(|| if path.contains('.') { None } else { Assets::get("index.html") });
+    // `served` is the asset actually returned, so the SPA fallback gets index.html's MIME type
+    // rather than a guess from an extension-less route.
+    let (served, file) = match Assets::get(path) {
+        Some(f) => (path, Some(f)),
+        None if !path.contains('.') => ("index.html", Assets::get("index.html")),
+        None => (path, None),
+    };
     match file {
         Some(f) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let mime = mime_guess::from_path(served).first_or_octet_stream();
             ([(header::CONTENT_TYPE, mime.as_ref())], f.data).into_response()
         }
         None if path == "index.html" => (StatusCode::NOT_FOUND, "frontend not built: run `npm run build`").into_response(),
