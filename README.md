@@ -1,83 +1,85 @@
-# kp2 — Markdown 手順書 + ブラウザターミナル
+# kp2 — Markdown runbooks + a browser terminal
 
-ブラウザの左ペインに Markdown 手順書、右ペインに xterm.js のターミナルを表示し、
-手順書の `bash` / `sh` / `shell` コードブロックの **Run** ボタンでコマンドをローカル shell に流し込むツールです。
-「ローカルで動く Instruqt / Killercoda」の最小構成 (MVP) です。
+English | [日本語](README.ja.md)
+
+kp2 shows a Markdown runbook in the left pane and an xterm.js terminal in the right pane of your browser.
+Every `bash` / `sh` / `shell` code block in the runbook gets a **Run** button that sends the command to your local shell.
+Think of it as a minimal, local-only Instruqt / Killercoda (MVP).
 
 ```
 Browser
   Markdown ──Run──▶ xterm.js ──WebSocket /ws──▶ kp2 (Rust) ──▶ PTY ──▶ $SHELL
                                                  │
-                                                 └─ code-server (任意) ──▶ ブラウザ版 VS Code
+                                                 └─ code-server (optional) ──▶ browser-based VS Code
 ```
 
-backend は Rust 製の単一バイナリ `kp2` (`server/`) です。ttyd と同じ WebSocket プロトコルを話すので、フロントエンドの xterm.js クライアントはそのまま使っています。
+The backend is a single Rust binary, `kp2` (`server/`). It speaks the same WebSocket protocol as ttyd, so the xterm.js client on the frontend is unchanged.
 
-## 必要なもの
+## Requirements
 
-- Node.js 20 以上 (フロントエンドのビルドと開発用)
+- Node.js 20 or later (to build and develop the frontend)
 - Rust (stable)
-- 任意: [code-server](https://github.com/coder/code-server) (macOS: `brew install code-server`)。入っているとブラウザ版 VS Code のペインが出ます
+- Optional: [code-server](https://github.com/coder/code-server) (macOS: `brew install code-server`). When installed, a browser-based VS Code pane becomes available
 
-## 起動
+## Getting started
 
-### 開発
+### Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` は次の 2 つを同時に起動します。
+`npm run dev` starts the following two processes together.
 
-| プロセス | バインド先 | 役割 |
+| Process | Bind address | Role |
 | --- | --- | --- |
-| kp2 (`cargo run`) | `127.0.0.1:7681` | PTY と shell、手順書とお気に入りの API、code-server の起動 |
-| Vite dev server | `127.0.0.1:5173` | React UI の配信。`/ws` `/token` `/api` を kp2 へプロキシ |
+| kp2 (`cargo run`) | `127.0.0.1:7681` | PTY and shell, the runbook and favorites APIs, starting code-server |
+| Vite dev server | `127.0.0.1:5173` | Serves the React UI. Proxies `/ws`, `/token` and `/api` to kp2 |
 
-ブラウザで <http://127.0.0.1:5173/> を開いてください。
+Open <http://127.0.0.1:5173/> in your browser.
 
-### 単一バイナリで動かす
+### Running the single binary
 
 ```bash
 npm run build   # tsc + vite build + cargo build --release
 npm start       # = server/target/release/kp2
 ```
 
-`kp2` はビルド済みの UI を同梱しているので、Node も Vite も不要で <http://127.0.0.1:5173/> にそのまま出ます。
+`kp2` embeds the built UI, so it serves <http://127.0.0.1:5173/> without Node or Vite.
 
 ```
 kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 7682]
 ```
 
-- `--docs`: 既定の手順書フォルダ
-- `--workspace`: ターミナルの開始ディレクトリで、code-server が開くフォルダ
-- `--no-editor`: code-server が入っていても起動しない
+- `--docs`: the default runbook folder (env: `DOCS_DIR`)
+- `--workspace`: the folder the terminal starts in and code-server opens (env: `KP2_WORKSPACE`)
+- `--no-editor`: do not start code-server even when it is installed
 
-shell は `$SHELL` → `/bin/zsh` → `/bin/bash` の順で選び、ログインシェルとして起動します。
+The shell is chosen in the order `$SHELL`, `/bin/zsh`, `/bin/bash` and started as a login shell.
 
-## 手順書
+## Runbooks
 
-デフォルトではリポジトリ内の `docs/*.md` を読み込みます。デフォルトは `docs/getting-started.md` です。
-Markdown は実行時にサーバーが読み、変更は server-sent events で通知されるので、編集すると即座に左ペインだけが更新され、ターミナルはそのまま維持されます。
+By default, kp2 loads `docs/*.md` from the repository, starting with `docs/getting-started.md`.
+The server reads the Markdown at request time and pushes changes over server-sent events, so editing a file updates only the left pane immediately while the terminal keeps running.
 
-### 別のディレクトリの手順書を開く
+### Opening runbooks from another directory
 
-リポジトリ外の任意のディレクトリを 3 通りの方法で指定できます。
+You can point kp2 at any directory outside the repository in three ways.
 
-1. **パスを入力**: ヘッダーのフォルダ名をクリックすると開くパネルに `~/notes/k8s` のようなパスを入れて **Open**。
-   サブディレクトリの `.md` も再帰的に一覧に出ます。最近開いたフォルダは同じパネルに並び、次回起動時も最後に開いた場所を復元します。
-2. **Choose folder…** (Chrome / Edge のみ): 同じパネルから OS のフォルダ選択ダイアログで選びます。この場合はブラウザが直接ファイルを読み、
-   サーバーは関与しません。変更は 2 秒ごとのポーリングで検知します。リロード後は「Re-open」を押すと再度読めるようになります (ブラウザの権限仕様)。
-3. **起動時の指定**: `kp2 --docs ~/notes` でデフォルトのディレクトリを変えられます。`?dir=<path>` を URL に付けても同じです。
+1. **Type a path**: click the folder name in the header, enter a path such as `~/notes/k8s` in the panel, and press **Open**.
+   `.md` files in subdirectories are listed recursively. Recently opened folders appear in the same panel, and the last location is restored on the next start.
+2. **Choose folder…** (Chrome / Edge only): pick a folder with the OS folder dialog from the same panel. In this mode the browser reads the files directly and
+   the server is not involved. Changes are detected by polling every 2 seconds. After a reload, press **Re-open** to regain access (a browser permission rule).
+3. **At startup**: `kp2 --docs ~/notes` (or `DOCS_DIR=~/notes npm run dev`) changes the default directory. Appending `?dir=<path>` to the URL does the same.
 
-### お気に入り (Pinned)
+### Favorites (Pinned)
 
-よく使うフォルダや手順書はピン留めできます。ヘッダーの手順書名の横にある ☆ で今の手順書を、フォルダパネル内の ☆ でフォルダや最近の項目をピン留めし、パネルの **Pinned** から 1 クリックで開けます。
+Frequently used folders and runbooks can be pinned. The ☆ next to the runbook name in the header pins the current runbook, and the ☆ inside the folder panel pins a folder or a recent entry. Pinned items open with one click from the **Pinned** section of the panel.
 
-保存先はブラウザではなくファイルです (ブラウザを変えても残り、手で編集したり dotfiles に入れたりできます)。
+Favorites are stored in a file rather than in the browser, so they survive browser changes and can be edited by hand or kept in your dotfiles.
 
-| 優先順 | 場所 |
+| Priority | Location |
 | --- | --- |
 | 1 | `$KP2_CONFIG_DIR/favorites.json` |
 | 2 | `$XDG_CONFIG_HOME/kp2/favorites.json` |
@@ -92,87 +94,94 @@ Markdown は実行時にサーバーが読み、変更は server-sent events で
 }
 ```
 
-`dir` は `~` 始まりでも構いません。`label` は省略可能で、表示名になります。ファイルを手で編集すると開いているブラウザにも即時反映されます。
-Choose folder… で選んだフォルダはパスをブラウザから取得できないためピン留めできません。パス入力で開き直してください。
+`dir` may start with `~`. `label` is optional and used as the display name. Editing the file by hand is reflected immediately in open browsers.
+Folders picked with **Choose folder…** cannot be pinned because the browser does not expose their path. Open them by typing the path instead.
 
-`?doc=<ファイル名>` で表示する手順書を選べます (ヘッダーのファイル名をクリックしても切り替えられます)。
+`?doc=<file name>` selects the runbook to show (clicking the file name in the header does the same).
 
-### 階層のあるフォルダ
+### Nested folders
 
-サブディレクトリの `.md` も再帰的に読み込み、`k8s/setup.md` のような相対パスが手順書名になります。
-ヘッダーのドロップダウンではサブディレクトリごとにまとめて表示されます。
+`.md` files in subdirectories are loaded recursively, and a relative path such as `k8s/setup.md` becomes the runbook name.
+The header dropdown groups them by subdirectory.
 
-Markdown 内の相対リンク (`[次へ](./ops/backup.md)` や `[戻る](../intro.md)`) は、同じフォルダ内の手順書を指していればクリックでその手順書に切り替わります。
-フォルダの外に出るリンクや存在しないファイルへのリンクは取り消し線付きになり、クリックしても何も起きません。`http(s)://` のリンクは新しいタブで開きます。
+Relative links inside Markdown (`[Next](./ops/backup.md)`, `[Back](../intro.md)`) switch to that runbook when the target is inside the same folder.
+Links that leave the folder or point to a missing file are shown with a strikethrough and do nothing when clicked. `http(s)://` links open in a new tab.
 
-サーバーが返すのは指定ディレクトリ配下の `.md` ファイルだけで、`..` などで外に出ることはできません。
+The server only serves `.md` files under the chosen directory; `..` and similar tricks cannot escape it.
 
-すべてのコードブロックに **Copy** があり、内容をクリップボードにコピーします。
-言語が `bash` / `sh` / `shell` のときはさらに次の 2 つが表示されます。
+Every code block has a **Copy** button that copies its content to the clipboard.
+Blocks whose language is `bash` / `sh` / `shell` additionally get these two buttons.
 
-- **Run**: 表示されている内容をそのままターミナルへ送り、最後に Enter を送ります。複数行はそのまま順に実行されます。
-- **Insert**: 内容を入力するだけで Enter は送りません (bracketed paste で送るので、複数行でも 1 つの入力として編集できます)。
+- **Run**: sends the content exactly as shown to the terminal, followed by Enter. Multi-line blocks run line by line in order. **Double-clicking** the code does the same.
+- **Insert**: types the content without sending Enter (sent via bracketed paste, so a multi-line block can be edited as a single input).
 
-## エディタ (code-server)
+## Editor (code-server)
 
-code-server が動いていると、右ペインが上下に分かれて上にブラウザ版 VS Code、下にターミナルが出ます。境界はドラッグで動かせます。
-VS Code が開くフォルダ (ワークスペース) は既定でカレントディレクトリで、`kp2 --workspace ~/src/myproject` で変えられます。
-ターミナルとエディタは同じローカルファイルシステムを見ているので、「手順書を読む → エディタで編集 → Run で実行 → ターミナルで結果を見る」がブラウザの中で完結します。
+When code-server is installed, kp2 starts it as a child process and an **Editor** button appears at the right end of the header. Pressing it splits the right pane vertically, with browser-based VS Code on top and the terminal below (drag the divider to resize). Press it again to hide the editor. It is hidden by default, and your choice is remembered by the browser. Clicking a `vscode:` link in a runbook shows the editor automatically. The pencil icon next to the runbook name in the header opens the runbook itself in VS Code; saving updates the left pane immediately.
+The folder VS Code opens (the workspace) defaults to the directory kp2 was started in (the repository root under `npm run dev`) and can be changed with `kp2 --workspace ~/src/myproject` or `KP2_WORKSPACE=~/src/myproject npm run dev`.
+The terminal and the editor see the same local filesystem, so "read the runbook → edit in the editor → Run → check the result in the terminal" all happens inside the browser.
 
-手順書からファイルを開くには `vscode:` リンクを書きます。パスはワークスペースからの相対パスで、`#L行番号` で行を指定できます。
+To open a file from a runbook, write a `vscode:` link. The path is relative to the workspace, and `#L<line>` jumps to a line.
 
 ```markdown
-[main.rs を開く](vscode:src/main.rs#L120)
+[Open main.rs](vscode:src/main.rs#L120)
 ```
 
-クリックすると kp2 の `/api/open` が `code-server -r` を実行し、動いている VS Code の該当ファイルが開きます (ページのリロードはありません)。
-code-server が動いていないときは説明が表示されるだけです。
+Clicking it makes kp2's `/api/open` run `code-server -r`, which opens the file in the running VS Code instance (no page reload).
+When code-server is not running, an explanation is shown instead.
 
-code-server のユーザーデータは `~/.local/share/kp2/code-server` (または `$XDG_DATA_HOME/kp2/code-server`) に置きます。
-`code-server -r` が既存インスタンスを見つけるための IPC ソケットがここに作られるため、短いパスである必要があります。
+The editor pane is an iframe that points at code-server's own origin (`http://127.0.0.1:7682/`), so the browser sees two origins: kp2 and code-server.
 
-## ターミナル操作
+code-server's user data lives in `~/.local/share/kp2/code-server` (or `$XDG_DATA_HOME/kp2/code-server`).
+The IPC socket that `code-server -r` uses to find the running instance is created there, so the path has to be short.
 
-- 通常のキー入力、Ctrl-C などの制御キーはそのまま shell に届きます
-- コピー: 選択して Cmd+C (macOS) / Ctrl+Shift+C。ペースト: Cmd+V / Ctrl+Shift+V
-- ウィンドウ/ペインのサイズ変更に追従して PTY を resize します
-- 接続が切れた場合はターミナル上部の **Reconnect** で再接続できます
+## Layout
 
-## セキュリティ
+Drag the divider between the runbook on the left and the terminal on the right to resize them. The width is remembered by the browser. When the editor is shown, the divider between the editor and the terminal can be dragged the same way.
 
-このツールはローカルマシン上で任意のコマンドを実行できます。
+## Terminal
 
-- kp2 も code-server も Vite も **127.0.0.1 のみ** にバインドします。外部ネットワークには公開しないでください。code-server は `--auth none` で起動しており、localhost 以外に公開すると誰でも操作できてしまいます
-- ターミナルの WebSocket は `Origin` ヘッダを検証し、localhost 以外のページからの接続を拒否します
-- Run ボタンが送る内容は、画面に表示されているコードブロックの内容そのものです。隠しコマンドや変換はありません
-- Markdown を開いただけでは何も実行されません。実行は必ずボタン操作かキー入力によります
-- 認証はありません (MVP)。信頼できるローカル環境でのみ使ってください
+- Ordinary key input and control keys such as Ctrl-C go straight to the shell
+- Copy: select and press Cmd+C (macOS) / Ctrl+Shift+C. Paste: Cmd+V / Ctrl+Shift+V
+- The PTY is resized to follow window and pane resizes
+- If the connection drops, press **Reconnect** at the top of the terminal
 
-## 構成
+## Security
+
+This tool can run arbitrary commands on your local machine.
+
+- kp2, code-server and Vite all bind to **127.0.0.1 only**. Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
+- The terminal WebSocket checks the `Origin` header and rejects connections from pages that are not served from localhost
+- What the Run button sends is exactly the content of the code block shown on screen. There are no hidden commands or transformations
+- Merely opening a Markdown file executes nothing. Execution always requires a button click or a keystroke
+- There is no authentication (MVP). Use it only in a trusted local environment
+
+## Project layout
 
 ```
-docs/getting-started.md   手順書 (Markdown、デフォルトのディレクトリ)
-server/                   Rust backend (単一バイナリ kp2)
-  src/main.rs             CLI、ルーティング、同梱 UI の配信
-  src/pty.rs              PTY と WebSocket (ttyd 互換プロトコル、Origin 検証)
-  src/docs.rs             任意ディレクトリの .md 一覧と本文、フォルダ監視
-  src/favorites.rs        favorites.json の読み書き
-  src/editor.rs           code-server の起動、稼働確認、ファイルを開く API
-  src/events.rs           server-sent events (/api/events)
-vite.config.ts            dev server の localhost bind と kp2 へのプロキシ
-src/ttyd.ts               ttyd プロトコルの最小クライアント
+docs/getting-started.md   Runbook (Markdown, the default directory)
+server/                   Rust backend (the single kp2 binary)
+  src/main.rs             CLI, routing, serving the embedded UI
+  src/pty.rs              PTY and WebSocket (ttyd-compatible protocol, Origin check)
+  src/docs.rs             Listing and reading .md files in any directory, folder watching
+  src/favorites.rs        Reading and writing favorites.json
+  src/editor.rs           Starting code-server, health check, the open-file API
+  src/events.rs           Server-sent events (/api/events)
+vite.config.ts            Localhost bind for the dev server and the proxy to kp2
+src/ttyd.ts               Minimal client for the ttyd WebSocket protocol
 src/TerminalPane.tsx      xterm.js + fit addon + resize/copy/paste
-src/Guide.tsx             Markdown レンダリングと Copy / Insert / Run、リンク処理
-src/docs.ts               手順書ストア (サーバー経由 / File System Access API の 2 系統)、手順書の選択、お気に入り
-src/DocsPicker.tsx        ヘッダーのフォルダ / 手順書セレクタとフォルダ選択パネル
-src/editor.ts             エディタの稼働状態と vscode: リンクの解釈
-src/SplitPane.tsx         エディタ / ターミナルの上下分割 (ドラッグで比率変更)
-src/App.tsx               2 ペインレイアウト
+src/Guide.tsx             Markdown rendering, the Copy / Insert / Run buttons and link handling
+src/docs.ts               Runbook store (server-backed and File System Access API), runbook selection, favorites
+src/DocsPicker.tsx        Folder / runbook selector in the header and the folder panel
+src/editor.ts             Editor availability, show/hide state, vscode: link handling
+src/EditorToggle.tsx      The Editor button in the header
+src/SplitPane.tsx         Vertical editor / terminal split (drag to change the ratio)
+src/App.tsx               Two-pane layout
 ```
 
-## backend について
+## About the backend
 
-最初の MVP では PTY 管理を [ttyd](https://github.com/tsl0922/ttyd) に任せていました。ttyd の WebSocket プロトコルは
-「先頭 1 バイトがコマンド種別、`'0'`=入力、`'1'`=resize」という単純なものなので、そのプロトコルを Rust で実装し直し、
-フロントエンドはそのままに backend を単一バイナリにしています。外部バイナリのインストールが不要になり、
-接続元の検証やセッション管理を自前で持てるようになりました。
+The first MVP left PTY management to [ttyd](https://github.com/tsl0922/ttyd). ttyd's WebSocket protocol is very simple
+(the first byte is the command type: `'0'` = input, `'1'` = resize), so kp2 reimplements that protocol in Rust and keeps the
+frontend as it was, while the backend becomes a single binary. No external binary has to be installed any more, and kp2 can
+validate the connecting origin and manage sessions itself.

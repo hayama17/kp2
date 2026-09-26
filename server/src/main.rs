@@ -32,10 +32,10 @@ struct Cli {
     #[arg(long, default_value_t = 5173)]
     port: u16,
     /// Default markdown folder (any other folder can be opened from the UI).
-    #[arg(long, default_value = "docs")]
+    #[arg(long, env = "DOCS_DIR", default_value = "docs")]
     docs: PathBuf,
     /// Folder the terminal starts in and code-server opens. Defaults to the current directory.
-    #[arg(long)]
+    #[arg(long, env = "KP2_WORKSPACE")]
     workspace: Option<PathBuf>,
     /// Do not start code-server even if it is installed.
     #[arg(long)]
