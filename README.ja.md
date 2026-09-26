@@ -13,7 +13,7 @@ Browser
                                                  └─ code-server (任意) ──▶ ブラウザ版 VS Code
 ```
 
-backend は Rust 製の単一バイナリ `kp2` (`server/`) です。ttyd と同じ WebSocket プロトコルを話すので、フロントエンドの xterm.js クライアントはそのまま使っています。
+backend は Rust 製の単一バイナリ `kp2` (`server/`) です。ターミナルの PTY を持ち、手順書とお気に入りの API を提供し、code-server が入っていれば起動し、ビルド済みの UI を同梱します。
 
 ## 必要なもの
 
@@ -162,13 +162,13 @@ code-server のユーザーデータは `~/.local/share/kp2/code-server` (また
 docs/getting-started.md   手順書 (Markdown、デフォルトのディレクトリ)
 server/                   Rust backend (単一バイナリ kp2)
   src/main.rs             CLI、ルーティング、同梱 UI の配信
-  src/pty.rs              PTY と WebSocket (ttyd 互換プロトコル、Origin 検証)
+  src/pty.rs              WebSocket 接続ごとの PTY、ターミナルのワイヤプロトコル、Origin 検証
   src/docs.rs             任意ディレクトリの .md 一覧と本文、フォルダ監視
   src/favorites.rs        favorites.json の読み書き
   src/editor.rs           code-server の起動、稼働確認、ファイルを開く API
   src/events.rs           server-sent events (/api/events)
 vite.config.ts            dev server の localhost bind と kp2 へのプロキシ
-src/ttyd.ts               ttyd プロトコルの最小クライアント
+src/terminal.ts           ターミナルプロトコルの WebSocket クライアント (入力、出力、resize、フロー制御)
 src/TerminalPane.tsx      xterm.js + fit addon + resize/copy/paste
 src/Guide.tsx             Markdown レンダリングと Copy / Insert / Run、リンク処理
 src/docs.ts               手順書ストア (サーバー経由 / File System Access API の 2 系統)、手順書の選択、お気に入り
@@ -178,10 +178,3 @@ src/EditorToggle.tsx      ヘッダーの Editor ボタン
 src/SplitPane.tsx         エディタ / ターミナルの上下分割 (ドラッグで比率変更)
 src/App.tsx               2 ペインレイアウト
 ```
-
-## backend について
-
-最初の MVP では PTY 管理を [ttyd](https://github.com/tsl0922/ttyd) に任せていました。ttyd の WebSocket プロトコルは
-「先頭 1 バイトがコマンド種別、`'0'`=入力、`'1'`=resize」という単純なものなので、そのプロトコルを Rust で実装し直し、
-フロントエンドはそのままに backend を単一バイナリにしています。外部バイナリのインストールが不要になり、
-接続元の検証やセッション管理を自前で持てるようになりました。

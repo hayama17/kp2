@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { TtydClient, type TtydStatus } from './ttyd';
+import { TerminalClient, type TerminalStatus } from './terminal';
 
 export interface TerminalHandle {
   /** Write text to the PTY as if typed. */
@@ -20,7 +20,7 @@ const TOKEN_URL = `${location.origin}/token`;
 
 export function TerminalPane({ onReady }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<TtydStatus>('connecting');
+  const [status, setStatus] = useState<TerminalStatus>('connecting');
   const [title, setTitle] = useState('');
   const [reconnectKey, setReconnectKey] = useState(0);
 
@@ -55,7 +55,7 @@ export function TerminalPane({ onReady }: Props) {
       return true;
     });
 
-    const client = new TtydClient(term, {
+    const client = new TerminalClient(term, {
       wsUrl: WS_URL,
       tokenUrl: TOKEN_URL,
       onStatus: setStatus,
