@@ -1,4 +1,4 @@
-// Minimal client for the ttyd (>= 1.7) WebSocket protocol.
+// WebSocket client for kp2's terminal protocol (server side: server/src/pty.rs).
 //
 //   client -> server : '0' + input bytes | '1' + JSON({columns, rows}) | '2' pause | '3' resume
 //   server -> client : '0' + output bytes | '1' + window title | '2' + JSON preferences
@@ -9,28 +9,28 @@ import type { Terminal } from '@xterm/xterm';
 const enum ClientCmd { Input = '0', Resize = '1', Pause = '2', Resume = '3' }
 const enum ServerCmd { Output = '0', Title = '1', Prefs = '2' }
 
-export type TtydStatus = 'connecting' | 'open' | 'closed' | 'error';
+export type TerminalStatus = 'connecting' | 'open' | 'closed' | 'error';
 
-export interface TtydClientOptions {
+export interface TerminalClientOptions {
   wsUrl: string;
   tokenUrl: string;
-  onStatus?: (status: TtydStatus) => void;
+  onStatus?: (status: TerminalStatus) => void;
   onTitle?: (title: string) => void;
 }
 
-export class TtydClient {
+export class TerminalClient {
   private socket: WebSocket | null = null;
   private readonly encoder = new TextEncoder();
   private readonly decoder = new TextDecoder();
   private disposables: { dispose(): void }[] = [];
   private closedByUser = false;
 
-  // Flow control (same thresholds as ttyd's own web client).
+  // Flow control: ask the server to pause while xterm.js still has a backlog to render.
   private written = 0;
   private pending = 0;
   private paused = false;
 
-  constructor(private readonly term: Terminal, private readonly opts: TtydClientOptions) {}
+  constructor(private readonly term: Terminal, private readonly opts: TerminalClientOptions) {}
 
   async connect(): Promise<void> {
     this.closedByUser = false;
@@ -41,7 +41,7 @@ export class TtydClient {
       const res = await fetch(this.opts.tokenUrl);
       token = (await res.json()).token ?? '';
     } catch {
-      // ttyd without credentials returns {"token":""}; keep going with an empty token.
+      // The server returns {"token":""} when no credentials are configured; keep going with an empty token.
     }
 
     const socket = new WebSocket(this.opts.wsUrl, ['tty']);
@@ -71,7 +71,7 @@ export class TtydClient {
           this.opts.onTitle?.(this.decoder.decode(payload));
           break;
         case ServerCmd.Prefs:
-          // Preferences from ttyd's -t options; we manage xterm options ourselves.
+          // Preferences frame; xterm options are managed on the client, so it is ignored.
           break;
       }
     };

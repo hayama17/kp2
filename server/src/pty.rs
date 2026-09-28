@@ -1,5 +1,4 @@
-//! Browser terminal: a PTY per WebSocket connection, speaking ttyd's wire protocol so the
-//! existing xterm.js client (src/ttyd.ts) works unchanged.
+//! Browser terminal: a PTY per WebSocket connection. The wire protocol (client: src/terminal.ts):
 //!
 //!   client -> server  first frame: text JSON {AuthToken, columns, rows}
 //!                     then binary: '0'+input | '1'+JSON{columns,rows} | '2' pause | '3' resume

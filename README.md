@@ -13,7 +13,7 @@ Browser
                                                  └─ code-server (optional) ──▶ browser-based VS Code
 ```
 
-The backend is a single Rust binary, `kp2` (`server/`). It speaks the same WebSocket protocol as ttyd, so the xterm.js client on the frontend is unchanged.
+The backend is a single Rust binary, `kp2` (`server/`). It owns the PTY behind the terminal, serves the runbook and favorites APIs, starts code-server when it is installed, and embeds the built UI.
 
 ## Requirements
 
@@ -162,13 +162,13 @@ This tool can run arbitrary commands on your local machine.
 docs/getting-started.md   Runbook (Markdown, the default directory)
 server/                   Rust backend (the single kp2 binary)
   src/main.rs             CLI, routing, serving the embedded UI
-  src/pty.rs              PTY and WebSocket (ttyd-compatible protocol, Origin check)
+  src/pty.rs              PTY per WebSocket connection, the terminal wire protocol, Origin check
   src/docs.rs             Listing and reading .md files in any directory, folder watching
   src/favorites.rs        Reading and writing favorites.json
   src/editor.rs           Starting code-server, health check, the open-file API
   src/events.rs           Server-sent events (/api/events)
 vite.config.ts            Localhost bind for the dev server and the proxy to kp2
-src/ttyd.ts               Minimal client for the ttyd WebSocket protocol
+src/terminal.ts           WebSocket client for the terminal protocol (input, output, resize, flow control)
 src/TerminalPane.tsx      xterm.js + fit addon + resize/copy/paste
 src/Guide.tsx             Markdown rendering, the Copy / Insert / Run buttons and link handling
 src/docs.ts               Runbook store (server-backed and File System Access API), runbook selection, favorites
@@ -178,10 +178,3 @@ src/EditorToggle.tsx      The Editor button in the header
 src/SplitPane.tsx         Vertical editor / terminal split (drag to change the ratio)
 src/App.tsx               Two-pane layout
 ```
-
-## About the backend
-
-The first MVP left PTY management to [ttyd](https://github.com/tsl0922/ttyd). ttyd's WebSocket protocol is very simple
-(the first byte is the command type: `'0'` = input, `'1'` = resize), so kp2 reimplements that protocol in Rust and keeps the
-frontend as it was, while the backend becomes a single binary. No external binary has to be installed any more, and kp2 can
-validate the connecting origin and manage sessions itself.

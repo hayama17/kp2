@@ -2,7 +2,7 @@
 //! local binary. Binds to 127.0.0.1 only.
 //!
 //! Routes
-//!   GET  /token, GET /ws           terminal (ttyd wire protocol, see pty.rs)
+//!   GET  /token, GET /ws           terminal (WebSocket wire protocol, see pty.rs)
 //!   GET  /api/docs, /api/doc       markdown from any local folder (docs.rs)
 //!   GET/PUT /api/favorites         pinned folders / documents (favorites.rs)
 //!   GET  /api/editor, POST /api/open   code-server integration (editor.rs)
