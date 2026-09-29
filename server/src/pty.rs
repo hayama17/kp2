@@ -25,7 +25,7 @@ pub async fn token() -> Json<serde_json::Value> {
 /// drive the terminal.
 fn origin_allowed(headers: &HeaderMap, allowed: &[String]) -> bool {
     let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else { return true };
-    if allowed.iter().any(|a| a.trim_end_matches('/').eq_ignore_ascii_case(origin)) {
+    if allowed.iter().any(|a| a.trim().trim_end_matches('/').eq_ignore_ascii_case(origin)) {
         return true;
     }
     let host = origin.trim_start_matches("http://").trim_start_matches("https://");
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn origin_check() {
-        let allowed = vec!["https://handson.example.com/".to_string()];
+        let allowed = vec!["https://handson.example.com/".to_string(), " https://b.example.com".to_string()];
         assert!(origin_allowed(&HeaderMap::new(), &[]));
         assert!(origin_allowed(&with_origin("http://127.0.0.1:5173"), &[]));
         assert!(origin_allowed(&with_origin("http://localhost:5173"), &[]));
@@ -178,5 +178,6 @@ mod tests {
         assert!(origin_allowed(&with_origin("https://handson.example.com"), &allowed));
         assert!(!origin_allowed(&with_origin("http://handson.example.com"), &allowed));
         assert!(!origin_allowed(&with_origin("https://handson.example.com.evil.test"), &allowed));
+        assert!(origin_allowed(&with_origin("https://b.example.com"), &allowed));
     }
 }

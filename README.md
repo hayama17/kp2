@@ -55,7 +55,7 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--docs`: the default runbook folder (env: `DOCS_DIR`)
 - `--workspace`: the folder the terminal starts in and code-server opens (env: `KP2_WORKSPACE`)
 - `--no-editor`: do not start code-server even when it is installed
-- `--allowed-origin`: an extra origin such as `https://handson.example.com` that may open the terminal, for use behind a reverse proxy. Repeat it or separate with commas (env: `KP2_ALLOWED_ORIGINS`)
+- `--allowed-origin`: an extra origin such as `https://handson.example.com` that may open the terminal, for use behind a reverse proxy. Write it as the browser sends it, without a default port such as `:443`. Repeat it or separate with commas (env: `KP2_ALLOWED_ORIGINS`)
 - `--editor-url`: the URL the editor pane loads code-server from, such as `/code/` when a reverse proxy forwards that path to code-server. Defaults to `http://127.0.0.1:<editor-port>/` (env: `KP2_EDITOR_URL`)
 
 The shell is chosen in the order `$SHELL`, `/bin/zsh`, `/bin/bash` and started as a login shell.
