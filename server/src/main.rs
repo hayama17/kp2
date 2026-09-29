@@ -44,6 +44,10 @@ struct Cli {
     /// Port for code-server (bound to 127.0.0.1).
     #[arg(long, default_value_t = 7682)]
     editor_port: u16,
+    /// URL the browser loads code-server from, e.g. `/code/` when a reverse proxy forwards that
+    /// path to the editor port. Defaults to http://127.0.0.1:<editor-port>/.
+    #[arg(long, env = "KP2_EDITOR_URL")]
+    editor_url: Option<String>,
 }
 
 #[derive(RustEmbed)]
@@ -73,7 +77,7 @@ async fn main() {
     let events = events::Hub::new();
     let watcher = docs::Watcher::new(events.clone()).expect("file watcher");
     watcher.watch_favorites(&favorites_file);
-    let editor = editor::Editor::start(cli.editor_port, &workspace, !cli.no_editor).await;
+    let editor = editor::Editor::start(cli.editor_port, cli.editor_url, &workspace, !cli.no_editor).await;
 
     let state = Arc::new(AppState {
         docs_default: docs_default.clone(),

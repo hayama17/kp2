@@ -9,6 +9,8 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream, process::{Child, 
 
 pub struct Editor {
     port: u16,
+    /// Where the browser loads code-server from; `None` means http://127.0.0.1:<port>/.
+    public_url: Option<String>,
     data_dir: PathBuf,
     workspace: PathBuf,
     child: Mutex<Option<Child>>,
@@ -24,9 +26,9 @@ fn data_dir() -> PathBuf {
 }
 
 impl Editor {
-    pub async fn start(port: u16, workspace: &Path, enabled: bool) -> Self {
+    pub async fn start(port: u16, public_url: Option<String>, workspace: &Path, enabled: bool) -> Self {
         let data_dir = data_dir();
-        let editor = Self { port, data_dir: data_dir.clone(), workspace: workspace.to_path_buf(), child: Mutex::new(None) };
+        let editor = Self { port, public_url, data_dir: data_dir.clone(), workspace: workspace.to_path_buf(), child: Mutex::new(None) };
         if !enabled {
             tracing::info!("editor:    disabled (--no-editor)");
             return editor;
@@ -74,7 +76,8 @@ impl Editor {
     }
 
     pub fn url(&self) -> String {
-        format!("http://127.0.0.1:{}/?folder={}", self.port, percent_encode(&self.workspace.to_string_lossy()))
+        let base = self.public_url.clone().unwrap_or_else(|| format!("http://127.0.0.1:{}/", self.port));
+        format!("{base}?folder={}", percent_encode(&self.workspace.to_string_lossy()))
     }
 }
 
