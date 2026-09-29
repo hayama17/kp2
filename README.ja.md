@@ -56,6 +56,7 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--workspace`: ターミナルの開始ディレクトリで、code-server が開くフォルダ (環境変数 `KP2_WORKSPACE` でも指定可)
 - `--no-editor`: code-server が入っていても起動しない
 - `--allowed-origin`: ターミナルへの接続を追加で許可するオリジン (例: `https://handson.example.com`)。リバースプロキシの後ろで使うときに指定する。複数指定するときはフラグを繰り返すかカンマで区切る (環境変数 `KP2_ALLOWED_ORIGINS` でも指定可)
+- `--editor-url`: エディタペインが code-server を読み込む URL。リバースプロキシが `/code/` を code-server へ転送する構成なら `/code/` を指定する。既定は `http://127.0.0.1:<editor-port>/` (環境変数 `KP2_EDITOR_URL` でも指定可)
 
 shell は `$SHELL` → `/bin/zsh` → `/bin/bash` の順で選び、ログインシェルとして起動します。
 
