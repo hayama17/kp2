@@ -55,6 +55,7 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--docs`: the default runbook folder (env: `DOCS_DIR`)
 - `--workspace`: the folder the terminal starts in and code-server opens (env: `KP2_WORKSPACE`)
 - `--no-editor`: do not start code-server even when it is installed
+- `--host`: the address kp2 listens on, `127.0.0.1` by default (env: `KP2_HOST`). Change it only when an authenticating reverse proxy on another host sits in front. code-server stays on 127.0.0.1 regardless
 
 The shell is chosen in the order `$SHELL`, `/bin/zsh`, `/bin/bash` and started as a login shell.
 
@@ -150,7 +151,7 @@ Drag the divider between the runbook on the left and the terminal on the right t
 
 This tool can run arbitrary commands on your local machine.
 
-- kp2, code-server and Vite all bind to **127.0.0.1 only**. Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
+- kp2, code-server and Vite all bind to **127.0.0.1 only** (kp2 can be moved with `--host`, meant only for use behind an authenticating reverse proxy). Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
 - The terminal WebSocket checks the `Origin` header and rejects connections from pages that are not served from localhost
 - What the Run button sends is exactly the content of the code block shown on screen. There are no hidden commands or transformations
 - Merely opening a Markdown file executes nothing. Execution always requires a button click or a keystroke

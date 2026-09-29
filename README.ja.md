@@ -55,6 +55,7 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--docs`: 既定の手順書フォルダ (環境変数 `DOCS_DIR` でも指定可)
 - `--workspace`: ターミナルの開始ディレクトリで、code-server が開くフォルダ (環境変数 `KP2_WORKSPACE` でも指定可)
 - `--no-editor`: code-server が入っていても起動しない
+- `--host`: kp2 が待ち受けるアドレス。既定は `127.0.0.1` (環境変数 `KP2_HOST` でも指定可)。認証付きのリバースプロキシを別ホストに置くときだけ変更する。code-server は常に 127.0.0.1 で待ち受ける
 
 shell は `$SHELL` → `/bin/zsh` → `/bin/bash` の順で選び、ログインシェルとして起動します。
 
@@ -150,7 +151,7 @@ code-server のユーザーデータは `~/.local/share/kp2/code-server` (また
 
 このツールはローカルマシン上で任意のコマンドを実行できます。
 
-- kp2 も code-server も Vite も **127.0.0.1 のみ** にバインドします。外部ネットワークには公開しないでください。code-server は `--auth none` で起動しており、localhost 以外に公開すると誰でも操作できてしまいます
+- kp2 も code-server も Vite も **127.0.0.1 のみ** にバインドします (kp2 は `--host` で変更できますが、認証付きのリバースプロキシの後ろで使う場合に限ります)。外部ネットワークには公開しないでください。code-server は `--auth none` で起動しており、localhost 以外に公開すると誰でも操作できてしまいます
 - ターミナルの WebSocket は `Origin` ヘッダを検証し、localhost 以外のページからの接続を拒否します
 - Run ボタンが送る内容は、画面に表示されているコードブロックの内容そのものです。隠しコマンドや変換はありません
 - Markdown を開いただけでは何も実行されません。実行は必ずボタン操作かキー入力によります

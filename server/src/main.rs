@@ -1,5 +1,5 @@
 //! kp2: a Markdown guide, a browser terminal and (optionally) a browser VS Code, served from one
-//! local binary. Binds to 127.0.0.1 only.
+//! local binary. Binds to 127.0.0.1 unless --host says otherwise.
 //!
 //! Routes
 //!   GET  /token, GET /ws           terminal (WebSocket wire protocol, see pty.rs)
@@ -23,13 +23,17 @@ use axum::{
 };
 use clap::Parser;
 use rust_embed::RustEmbed;
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::{IpAddr, Ipv4Addr, SocketAddr}, path::PathBuf, sync::Arc};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
 #[command(name = "kp2", about = "Markdown guide + browser terminal + editor, from one local binary")]
 struct Cli {
-    /// Port to listen on (always bound to 127.0.0.1).
+    /// Address to listen on. Anything other than loopback exposes an unauthenticated shell, so
+    /// only change it when a reverse proxy with authentication sits in front.
+    #[arg(long, env = "KP2_HOST", default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST))]
+    host: IpAddr,
+    /// Port to listen on.
     #[arg(long, default_value_t = 5173)]
     port: u16,
     /// Default markdown folder (any other folder can be opened from the UI).
@@ -97,7 +101,7 @@ async fn main() {
         .fallback(static_handler)
         .with_state(state.clone());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], cli.port));
+    let addr = SocketAddr::new(cli.host, cli.port);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
     tracing::info!("kp2 on http://{addr}/");
     tracing::info!("docs:      {}", docs_default.display());
