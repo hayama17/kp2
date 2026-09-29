@@ -55,6 +55,8 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--docs`: 既定の手順書フォルダ (環境変数 `DOCS_DIR` でも指定可)
 - `--workspace`: ターミナルの開始ディレクトリで、code-server が開くフォルダ (環境変数 `KP2_WORKSPACE` でも指定可)
 - `--no-editor`: code-server が入っていても起動しない
+- `--allowed-origin`: ターミナルへの接続を追加で許可するオリジン (例: `https://handson.example.com`)。リバースプロキシの後ろで使うときに指定する。ブラウザが送る形で書き、`:443` のような既定ポートは付けない。複数指定するときはフラグを繰り返すかカンマで区切る (環境変数 `KP2_ALLOWED_ORIGINS` でも指定可)
+- `--editor-url`: エディタペインが code-server を読み込む URL。リバースプロキシが `/code/` を code-server へ転送する構成なら `/code/` を指定する。既定は `http://127.0.0.1:<editor-port>/` (環境変数 `KP2_EDITOR_URL` でも指定可)
 
 shell は `$SHELL` → `/bin/zsh` → `/bin/bash` の順で選び、ログインシェルとして起動します。
 
@@ -151,7 +153,7 @@ code-server のユーザーデータは `~/.local/share/kp2/code-server` (また
 このツールはローカルマシン上で任意のコマンドを実行できます。
 
 - kp2 も code-server も Vite も **127.0.0.1 のみ** にバインドします。外部ネットワークには公開しないでください。code-server は `--auth none` で起動しており、localhost 以外に公開すると誰でも操作できてしまいます
-- ターミナルの WebSocket は `Origin` ヘッダを検証し、localhost 以外のページからの接続を拒否します
+- ターミナルの WebSocket は `Origin` ヘッダを検証し、localhost 以外のページからの接続を拒否します。`--allowed-origin` で指定したオリジンは例外として許可します。kp2 自体には認証がないので、許可したオリジンではプロキシ側で認証をかけてください
 - Run ボタンが送る内容は、画面に表示されているコードブロックの内容そのものです。隠しコマンドや変換はありません
 - Markdown を開いただけでは何も実行されません。実行は必ずボタン操作かキー入力によります
 - 認証はありません (MVP)。信頼できるローカル環境でのみ使ってください

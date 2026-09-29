@@ -44,6 +44,14 @@ struct Cli {
     /// Port for code-server (bound to 127.0.0.1).
     #[arg(long, default_value_t = 7682)]
     editor_port: u16,
+    /// Extra origin (scheme://host[:port]) allowed to open the terminal, e.g. a reverse proxy
+    /// in front of kp2. Repeat the flag or separate with commas.
+    #[arg(long = "allowed-origin", env = "KP2_ALLOWED_ORIGINS", value_delimiter = ',')]
+    allowed_origins: Vec<String>,
+    /// URL the browser loads code-server from, e.g. `/code/` when a reverse proxy forwards that
+    /// path to the editor port. Defaults to http://127.0.0.1:<editor-port>/.
+    #[arg(long, env = "KP2_EDITOR_URL")]
+    editor_url: Option<String>,
 }
 
 #[derive(RustEmbed)]
@@ -53,6 +61,7 @@ struct Assets;
 pub struct AppState {
     pub docs_default: PathBuf,
     pub workspace: PathBuf,
+    pub allowed_origins: Vec<String>,
     pub favorites_file: PathBuf,
     pub editor: editor::Editor,
     pub events: events::Hub,
@@ -73,11 +82,12 @@ async fn main() {
     let events = events::Hub::new();
     let watcher = docs::Watcher::new(events.clone()).expect("file watcher");
     watcher.watch_favorites(&favorites_file);
-    let editor = editor::Editor::start(cli.editor_port, &workspace, !cli.no_editor).await;
+    let editor = editor::Editor::start(cli.editor_port, cli.editor_url, &workspace, !cli.no_editor).await;
 
     let state = Arc::new(AppState {
         docs_default: docs_default.clone(),
         workspace: workspace.clone(),
+        allowed_origins: cli.allowed_origins,
         favorites_file: favorites_file.clone(),
         editor,
         events,

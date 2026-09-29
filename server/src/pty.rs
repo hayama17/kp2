@@ -21,9 +21,13 @@ pub async fn token() -> Json<serde_json::Value> {
     Json(json!({ "token": "" }))
 }
 
-/// Only pages served from this machine may drive the terminal.
-fn origin_allowed(headers: &HeaderMap) -> bool {
+/// Only pages served from this machine, or from an origin listed with --allowed-origin, may
+/// drive the terminal.
+fn origin_allowed(headers: &HeaderMap, allowed: &[String]) -> bool {
     let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else { return true };
+    if allowed.iter().any(|a| a.trim().trim_end_matches('/').eq_ignore_ascii_case(origin)) {
+        return true;
+    }
     let host = origin.trim_start_matches("http://").trim_start_matches("https://");
     let host = host.split('/').next().unwrap_or("");
     let host = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
@@ -31,7 +35,7 @@ fn origin_allowed(headers: &HeaderMap) -> bool {
 }
 
 pub async fn ws_handler(ws: WebSocketUpgrade, headers: HeaderMap, State(state): State<Arc<AppState>>) -> Response {
-    if !origin_allowed(&headers) {
+    if !origin_allowed(&headers, &state.allowed_origins) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
     ws.protocols(["tty"]).on_upgrade(move |socket| async move {
@@ -152,4 +156,28 @@ async fn session(mut socket: WebSocket, state: Arc<AppState>) -> anyhow::Result<
     });
     let _ = socket.send(Message::Close(None)).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_origin(origin: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(header::ORIGIN, origin.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn origin_check() {
+        let allowed = vec!["https://handson.example.com/".to_string(), " https://b.example.com".to_string()];
+        assert!(origin_allowed(&HeaderMap::new(), &[]));
+        assert!(origin_allowed(&with_origin("http://127.0.0.1:5173"), &[]));
+        assert!(origin_allowed(&with_origin("http://localhost:5173"), &[]));
+        assert!(!origin_allowed(&with_origin("https://handson.example.com"), &[]));
+        assert!(origin_allowed(&with_origin("https://handson.example.com"), &allowed));
+        assert!(!origin_allowed(&with_origin("http://handson.example.com"), &allowed));
+        assert!(!origin_allowed(&with_origin("https://handson.example.com.evil.test"), &allowed));
+        assert!(origin_allowed(&with_origin("https://b.example.com"), &allowed));
+    }
 }
