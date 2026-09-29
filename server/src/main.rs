@@ -44,6 +44,10 @@ struct Cli {
     /// Port for code-server (bound to 127.0.0.1).
     #[arg(long, default_value_t = 7682)]
     editor_port: u16,
+    /// Extra origin (scheme://host[:port]) allowed to open the terminal, e.g. a reverse proxy
+    /// in front of kp2. Repeat the flag or separate with commas.
+    #[arg(long = "allowed-origin", env = "KP2_ALLOWED_ORIGINS", value_delimiter = ',')]
+    allowed_origins: Vec<String>,
 }
 
 #[derive(RustEmbed)]
@@ -53,6 +57,7 @@ struct Assets;
 pub struct AppState {
     pub docs_default: PathBuf,
     pub workspace: PathBuf,
+    pub allowed_origins: Vec<String>,
     pub favorites_file: PathBuf,
     pub editor: editor::Editor,
     pub events: events::Hub,
@@ -78,6 +83,7 @@ async fn main() {
     let state = Arc::new(AppState {
         docs_default: docs_default.clone(),
         workspace: workspace.clone(),
+        allowed_origins: cli.allowed_origins,
         favorites_file: favorites_file.clone(),
         editor,
         events,

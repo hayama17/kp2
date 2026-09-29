@@ -55,6 +55,7 @@ kp2 [--port 5173] [--docs docs] [--workspace .] [--no-editor] [--editor-port 768
 - `--docs`: the default runbook folder (env: `DOCS_DIR`)
 - `--workspace`: the folder the terminal starts in and code-server opens (env: `KP2_WORKSPACE`)
 - `--no-editor`: do not start code-server even when it is installed
+- `--allowed-origin`: an extra origin such as `https://handson.example.com` that may open the terminal, for use behind a reverse proxy. Repeat it or separate with commas (env: `KP2_ALLOWED_ORIGINS`)
 
 The shell is chosen in the order `$SHELL`, `/bin/zsh`, `/bin/bash` and started as a login shell.
 
@@ -151,7 +152,7 @@ Drag the divider between the runbook on the left and the terminal on the right t
 This tool can run arbitrary commands on your local machine.
 
 - kp2, code-server and Vite all bind to **127.0.0.1 only**. Do not expose them to an external network. code-server runs with `--auth none`, so anyone who can reach it beyond localhost can control it
-- The terminal WebSocket checks the `Origin` header and rejects connections from pages that are not served from localhost
+- The terminal WebSocket checks the `Origin` header and rejects connections from pages that are not served from localhost or listed with `--allowed-origin`. kp2 has no authentication of its own, so put authentication in the proxy for any origin you allow
 - What the Run button sends is exactly the content of the code block shown on screen. There are no hidden commands or transformations
 - Merely opening a Markdown file executes nothing. Execution always requires a button click or a keystroke
 - There is no authentication (MVP). Use it only in a trusted local environment
