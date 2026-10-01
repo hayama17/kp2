@@ -44,6 +44,12 @@ macOS 向けバイナリは署名も公証もしていません。ブラウザ�
 xattr -d com.apple.quarantine kp2
 ```
 
+各アーカイブには[ビルド来歴の証明 (artifact attestation)](https://docs.github.com/ja/actions/concepts/security/artifact-attestations) が付いています。ダウンロードしたものが、このリポジトリのリリース workflow でタグのコミットからビルドされたことを確認するには次を実行します。
+
+```bash
+gh attestation verify kp2-v0.1.0-aarch64-apple-darwin.tar.gz --owner saku3
+```
+
 `curl` や `gh release download` で取得した場合は隔離属性が付きません。実行時に必要なのは、エディタペインを使う場合の [code-server](https://github.com/coder/code-server) だけです。
 
 ### 開発

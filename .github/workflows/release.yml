@@ -4,7 +4,11 @@ on:
   push:
     tags: ['v*']
 
-# The token is read-only everywhere except the job that creates the release.
+# The token is read-only everywhere except the job that creates the release. Release builds do
+# not restore the npm or cargo caches: a cache is an untrusted input to a privileged workflow, and
+# a clean build only costs a couple of minutes a few times a year. Each archive gets a build
+# provenance attestation, so a download can be checked with:
+#   gh attestation verify kp2-v<ver>-<target>.tar.gz --owner saku3
 permissions:
   contents: read
 
@@ -42,6 +46,10 @@ jobs:
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for the provenance attestation
+      attestations: write
     env:
       ARCHIVE: kp2-v${{ needs.version.outputs.version }}-${{ matrix.target }}.tar.gz
     steps:
@@ -50,17 +58,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: npm
 
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch, 2026-09
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: server
-          key: ${{ matrix.target }}
 
       - name: Install musl linker
         if: runner.os == 'Linux'
@@ -84,6 +86,11 @@ jobs:
           tar -C "$(dirname "$bin")" -czf "$ARCHIVE" kp2
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           cat "$ARCHIVE.sha256"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ env.ARCHIVE }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

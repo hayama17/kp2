@@ -44,6 +44,12 @@ The macOS binaries are not signed or notarized. If you downloaded the archive wi
 xattr -d com.apple.quarantine kp2
 ```
 
+Each archive carries a [build provenance attestation](https://docs.github.com/en/actions/concepts/security/artifact-attestations). To check that a download was built by this repository's release workflow from the tagged commit:
+
+```bash
+gh attestation verify kp2-v0.1.0-aarch64-apple-darwin.tar.gz --owner saku3
+```
+
 Downloads made with `curl` or `gh release download` are not quarantined. Only [code-server](https://github.com/coder/code-server) is needed at run time, and only for the editor pane.
 
 ### Development
