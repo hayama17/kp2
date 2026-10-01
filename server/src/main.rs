@@ -27,7 +27,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
-#[command(name = "kp2", about = "Markdown guide + browser terminal + editor, from one local binary")]
+#[command(name = "kp2", version, about = "Markdown guide + browser terminal + editor, from one local binary")]
 struct Cli {
     /// Port to listen on (always bound to 127.0.0.1).
     #[arg(long, default_value_t = 5173)]
