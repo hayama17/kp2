@@ -17,11 +17,34 @@ The backend is a single Rust binary, `kp2` (`server/`). It owns the PTY behind t
 
 ## Requirements
 
+To build from source (not needed for the prebuilt binaries):
+
 - Node.js 20 or later (to build and develop the frontend)
 - Rust (stable)
 - Optional: [code-server](https://github.com/coder/code-server) (macOS: `brew install code-server`). When installed, a browser-based VS Code pane becomes available
 
 ## Getting started
+
+### Prebuilt binaries
+
+Each [release](https://github.com/saku3/kp2/releases) ships a single `kp2` binary for macOS (Apple silicon, Intel) and Linux (x86_64, arm64; statically linked, runs on any distribution).
+Download the archive for your platform, extract it and put `kp2` on your `PATH`.
+
+```bash
+tar xzf kp2-v0.1.0-aarch64-apple-darwin.tar.gz
+```
+
+```bash
+./kp2 --version
+```
+
+The macOS binaries are not signed or notarized. If you downloaded the archive with a browser, macOS marks it as quarantined and refuses to run it; clear the flag once:
+
+```bash
+xattr -d com.apple.quarantine kp2
+```
+
+Downloads made with `curl` or `gh release download` are not quarantined. Only [code-server](https://github.com/coder/code-server) is needed at run time, and only for the editor pane.
 
 ### Development
 

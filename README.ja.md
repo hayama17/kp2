@@ -17,11 +17,34 @@ backend は Rust 製の単一バイナリ `kp2` (`server/`) です。ターミ�
 
 ## 必要なもの
 
+ソースからビルドする場合に必要です (ビルド済みバイナリを使うなら不要)。
+
 - Node.js 20 以上 (フロントエンドのビルドと開発用)
 - Rust (stable)
 - 任意: [code-server](https://github.com/coder/code-server) (macOS: `brew install code-server`)。入っているとブラウザ版 VS Code のペインが出ます
 
 ## 起動
+
+### ビルド済みバイナリ
+
+[リリース](https://github.com/saku3/kp2/releases)ごとに、macOS (Apple silicon、Intel) と Linux (x86_64、arm64。静的リンクなのでディストリビューションを問いません) 向けの `kp2` バイナリを 1 つずつ置いています。
+自分のプラットフォームのアーカイブを取得して展開し、`kp2` を `PATH` の通った場所に置いてください。
+
+```bash
+tar xzf kp2-v0.1.0-aarch64-apple-darwin.tar.gz
+```
+
+```bash
+./kp2 --version
+```
+
+macOS 向けバイナリは署名も公証もしていません。ブラウザでダウンロードすると macOS が隔離属性を付けて実行を拒否するので、一度だけ属性を外してください。
+
+```bash
+xattr -d com.apple.quarantine kp2
+```
+
+`curl` や `gh release download` で取得した場合は隔離属性が付きません。実行時に必要なのは、エディタペインを使う場合の [code-server](https://github.com/coder/code-server) だけです。
 
 ### 開発
 

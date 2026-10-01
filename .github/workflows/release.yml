@@ -1,0 +1,125 @@
+# Builds the kp2 binary for each supported platform when a `v*` tag is pushed and attaches the
+# archives to a GitHub Release. The tag must match the version in server/Cargo.toml, which is
+# the single source of truth for the version (`kp2 --version` prints it).
+#
+#   git tag v0.1.0 && git push origin v0.1.0        -> release
+#   git tag v0.2.0-rc.1 && git push origin v0.2.0-rc.1  -> pre-release (any tag with a '-')
+#
+# Every target is built natively on a runner of the same architecture, so no cross toolchain is
+# needed. Linux binaries are linked statically against musl so they run on any distribution.
+# macOS binaries are not signed or notarized; see README.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match server/Cargo.toml
+        id: check
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -nE 's/^version = "(.*)"/\1/p' server/Cargo.toml | head -1)"
+          echo "tag: $tag_version  Cargo.toml: $cargo_version"
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match server/Cargo.toml version $cargo_version"
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    env:
+      ARCHIVE: kp2-v${{ needs.version.outputs.version }}-${{ matrix.target }}.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+          key: ${{ matrix.target }}
+
+      - name: Install musl linker
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+
+      # The UI must be built first: rust-embed copies dist/ into the binary at compile time.
+      - name: Build frontend
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vite build
+
+      - name: Build kp2
+        working-directory: server
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          bin="server/target/${{ matrix.target }}/release/kp2"
+          "$bin" --version
+          tar -C "$(dirname "$bin")" -czf "$ARCHIVE" kp2
+          shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+          cat "$ARCHIVE.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "kp2 $TAG" \
+            --generate-notes \
+            $prerelease
