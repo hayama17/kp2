@@ -1,6 +1,15 @@
 //! Markdown documents from any local folder, plus change notifications.
-use crate::{AppState, events::Hub, util::{ApiError, expand, normalize}};
-use axum::{Json, extract::{Query, State}, http::header, response::{IntoResponse, Response}};
+use crate::{
+    AppState,
+    events::Hub,
+    util::{ApiError, expand, normalize},
+};
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::header,
+    response::{IntoResponse, Response},
+};
 use notify::{EventKind, RecursiveMode, Watcher as _};
 use serde::Deserialize;
 use serde_json::json;
@@ -24,7 +33,10 @@ fn resolve_dir(state: &AppState, q: &DirQuery) -> Result<PathBuf, ApiError> {
         None => state.docs_default.clone(),
     };
     if !dir.is_dir() {
-        return Err(ApiError::not_found(format!("Not a directory: {}", dir.display())));
+        return Err(ApiError::not_found(format!(
+            "Not a directory: {}",
+            dir.display()
+        )));
     }
     Ok(dir)
 }
@@ -48,7 +60,10 @@ fn list_markdown(root: &Path, rel: &Path, out: &mut BTreeSet<String>) -> std::io
 }
 
 /// GET /api/docs?dir=<path> -> { dir, names }
-pub async fn list(State(state): State<Arc<AppState>>, Query(q): Query<DirQuery>) -> Result<Json<serde_json::Value>, ApiError> {
+pub async fn list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<DirQuery>,
+) -> Result<Json<serde_json::Value>, ApiError> {
     let dir = resolve_dir(&state, &q)?;
     let mut names = BTreeSet::new();
     list_markdown(&dir, Path::new(""), &mut names).map_err(ApiError::internal)?;
@@ -57,15 +72,27 @@ pub async fn list(State(state): State<Arc<AppState>>, Query(q): Query<DirQuery>)
 }
 
 /// GET /api/doc?dir=<path>&name=<relative.md> -> text/markdown
-pub async fn read(State(state): State<Arc<AppState>>, Query(q): Query<DirQuery>) -> Result<Response, ApiError> {
+pub async fn read(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<DirQuery>,
+) -> Result<Response, ApiError> {
     let dir = resolve_dir(&state, &q)?;
     let name = q.name.as_deref().unwrap_or("");
     let full = normalize(&dir.join(name));
     if !name.ends_with(".md") || name.contains('\0') || !full.starts_with(&dir) || full == dir {
         return Err(ApiError::bad("Invalid document name"));
     }
-    let text = tokio::fs::read_to_string(&full).await.map_err(|_| ApiError::not_found(format!("Not found: {}", full.display())))?;
-    Ok(([(header::CONTENT_TYPE, "text/markdown; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], text).into_response())
+    let text = tokio::fs::read_to_string(&full)
+        .await
+        .map_err(|_| ApiError::not_found(format!("Not found: {}", full.display())))?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "text/markdown; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        text,
+    )
+        .into_response())
 }
 
 /// Watches document folders (recursively) and the favorites file, publishing to the event hub.
@@ -99,7 +126,11 @@ impl Watcher {
                 EventKind::Access(_) => return,
             };
             for path in &ev.paths {
-                let is_favorites = favorites_cb.lock().unwrap().as_ref().is_some_and(|(given, canon)| path == given || path == canon);
+                let is_favorites = favorites_cb
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|(given, canon)| path == given || path == canon);
                 if is_favorites {
                     hub.send("favorites:changed", json!({}));
                     continue;
@@ -114,7 +145,11 @@ impl Watcher {
                 }
             }
         })?;
-        Ok(Self { inner: Mutex::new(inner), watched, favorites })
+        Ok(Self {
+            inner: Mutex::new(inner),
+            watched,
+            favorites,
+        })
     }
 
     pub fn watch_docs(&self, dir: &Path) {
@@ -122,7 +157,12 @@ impl Watcher {
         if watched.contains_key(dir) {
             return;
         }
-        if let Err(e) = self.inner.lock().unwrap().watch(dir, RecursiveMode::Recursive) {
+        if let Err(e) = self
+            .inner
+            .lock()
+            .unwrap()
+            .watch(dir, RecursiveMode::Recursive)
+        {
             tracing::warn!("cannot watch {}: {e}", dir.display());
             return;
         }
@@ -132,11 +172,19 @@ impl Watcher {
     pub fn watch_favorites(&self, file: &Path) {
         if let Some(parent) = file.parent() {
             let _ = std::fs::create_dir_all(parent);
-            if let Err(e) = self.inner.lock().unwrap().watch(parent, RecursiveMode::NonRecursive) {
+            if let Err(e) = self
+                .inner
+                .lock()
+                .unwrap()
+                .watch(parent, RecursiveMode::NonRecursive)
+            {
                 tracing::warn!("cannot watch {}: {e}", parent.display());
             }
             // The file itself may not exist yet, so canonicalize the directory and re-append the name.
-            let canon = file.file_name().map(|n| canonical(parent).join(n)).unwrap_or_else(|| file.to_path_buf());
+            let canon = file
+                .file_name()
+                .map(|n| canonical(parent).join(n))
+                .unwrap_or_else(|| file.to_path_buf());
             *self.favorites.lock().unwrap() = Some((file.to_path_buf(), canon));
         }
     }

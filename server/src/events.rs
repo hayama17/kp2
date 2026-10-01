@@ -29,7 +29,9 @@ impl Hub {
     }
 }
 
-pub async fn sse(State(state): State<Arc<crate::AppState>>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+pub async fn sse(
+    State(state): State<Arc<crate::AppState>>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = BroadcastStream::new(state.events.subscribe())
         .filter_map(|item| async move {
             match item {

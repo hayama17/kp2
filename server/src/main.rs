@@ -27,7 +27,11 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
-#[command(name = "kp2", version, about = "Markdown guide + browser terminal + editor, from one local binary")]
+#[command(
+    name = "kp2",
+    version,
+    about = "Markdown guide + browser terminal + editor, from one local binary"
+)]
 struct Cli {
     /// Port to listen on (always bound to 127.0.0.1).
     #[arg(long, default_value_t = 5173)]
@@ -46,7 +50,11 @@ struct Cli {
     editor_port: u16,
     /// Extra origin (scheme://host[:port]) allowed to open the terminal, e.g. a reverse proxy
     /// in front of kp2. Repeat the flag or separate with commas.
-    #[arg(long = "allowed-origin", env = "KP2_ALLOWED_ORIGINS", value_delimiter = ',')]
+    #[arg(
+        long = "allowed-origin",
+        env = "KP2_ALLOWED_ORIGINS",
+        value_delimiter = ','
+    )]
     allowed_origins: Vec<String>,
     /// URL the browser loads code-server from, e.g. `/code/` when a reverse proxy forwards that
     /// path to the editor port. Defaults to http://127.0.0.1:<editor-port>/.
@@ -73,16 +81,23 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().with_target(false).compact().init();
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .compact()
+        .init();
     let cli = Cli::parse();
 
-    let workspace = util::absolute(cli.workspace.unwrap_or_else(|| std::env::current_dir().expect("cwd")));
+    let workspace = util::absolute(
+        cli.workspace
+            .unwrap_or_else(|| std::env::current_dir().expect("cwd")),
+    );
     let docs_default = util::absolute(cli.docs);
     let favorites_file = favorites::favorites_file();
     let events = events::Hub::new();
     let watcher = docs::Watcher::new(events.clone()).expect("file watcher");
     watcher.watch_favorites(&favorites_file);
-    let editor = editor::Editor::start(cli.editor_port, cli.editor_url, &workspace, !cli.no_editor).await;
+    let editor =
+        editor::Editor::start(cli.editor_port, cli.editor_url, &workspace, !cli.no_editor).await;
 
     let state = Arc::new(AppState {
         docs_default: docs_default.clone(),
@@ -100,7 +115,10 @@ async fn main() {
         .route("/ws", get(pty::ws_handler))
         .route("/api/docs", get(docs::list))
         .route("/api/doc", get(docs::read))
-        .route("/api/favorites", get(favorites::get_all).put(favorites::put_all))
+        .route(
+            "/api/favorites",
+            get(favorites::get_all).put(favorites::put_all),
+        )
         .route("/api/editor", get(editor::info))
         .route("/api/open", post(editor::open))
         .route("/api/events", get(events::sse))
@@ -108,12 +126,17 @@ async fn main() {
         .with_state(state.clone());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], cli.port));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
     tracing::info!("kp2 on http://{addr}/");
     tracing::info!("docs:      {}", docs_default.display());
     tracing::info!("workspace: {}", workspace.display());
     tracing::info!("favorites: {}", favorites_file.display());
-    axum::serve(listener, app).with_graceful_shutdown(shutdown(state.clone())).await.expect("server");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown(state.clone()))
+        .await
+        .expect("server");
     state.editor.stop().await;
 }
 
@@ -123,7 +146,8 @@ async fn shutdown(state: Arc<AppState>) {
     let ctrl_c = tokio::signal::ctrl_c();
     #[cfg(unix)]
     {
-        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("SIGTERM handler");
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("SIGTERM handler");
         tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
     }
     #[cfg(not(unix))]
@@ -153,7 +177,11 @@ async fn static_handler(uri: Uri) -> Response {
             let mime = mime_guess::from_path(served).first_or_octet_stream();
             ([(header::CONTENT_TYPE, mime.as_ref())], f.data).into_response()
         }
-        None if path == "index.html" => (StatusCode::NOT_FOUND, "frontend not built: run `npm run build`").into_response(),
+        None if path == "index.html" => (
+            StatusCode::NOT_FOUND,
+            "frontend not built: run `npm run build`",
+        )
+            .into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }

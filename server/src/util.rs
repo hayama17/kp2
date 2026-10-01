@@ -1,4 +1,8 @@
-use axum::{Json, http::StatusCode, response::{IntoResponse, Response}};
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde_json::json;
 use std::path::{Component, Path, PathBuf};
 
@@ -6,9 +10,15 @@ use std::path::{Component, Path, PathBuf};
 pub struct ApiError(pub StatusCode, pub String);
 
 impl ApiError {
-    pub fn bad(msg: impl Into<String>) -> Self { Self(StatusCode::BAD_REQUEST, msg.into()) }
-    pub fn not_found(msg: impl Into<String>) -> Self { Self(StatusCode::NOT_FOUND, msg.into()) }
-    pub fn internal(err: impl std::fmt::Display) -> Self { Self(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()) }
+    pub fn bad(msg: impl Into<String>) -> Self {
+        Self(StatusCode::BAD_REQUEST, msg.into())
+    }
+    pub fn not_found(msg: impl Into<String>) -> Self {
+        Self(StatusCode::NOT_FOUND, msg.into())
+    }
+    pub fn internal(err: impl std::fmt::Display) -> Self {
+        Self(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -18,7 +28,9 @@ impl IntoResponse for ApiError {
 }
 
 pub fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/"))
 }
 
 /// Expand a leading "~" and make the path absolute and lexically normalized (no "." / "..").
@@ -45,7 +57,9 @@ pub fn normalize(p: &Path) -> PathBuf {
     for c in p.components() {
         match c {
             Component::CurDir => {}
-            Component::ParentDir => { out.pop(); }
+            Component::ParentDir => {
+                out.pop();
+            }
             other => out.push(other.as_os_str()),
         }
     }
