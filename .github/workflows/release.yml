@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# The token is read-only everywhere except the job that creates the release. Release builds do
+# not restore the npm or cargo caches: a cache is an untrusted input to a privileged workflow, and
+# a clean build only costs a couple of minutes a few times a year. Each archive gets a build
+# provenance attestation, so a download can be checked with:
+#   gh attestation verify kp2-v<ver>-<target>.tar.gz --owner saku3
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Tag must match server/Cargo.toml
+        id: check
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -nE 's/^version = "(.*)"/\1/p' server/Cargo.toml | head -1)"
+          echo "tag: $tag_version  Cargo.toml: $cargo_version"
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match server/Cargo.toml version $cargo_version"
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for the provenance attestation
+      attestations: write
+    env:
+      ARCHIVE: kp2-v${{ needs.version.outputs.version }}-${{ matrix.target }}.tar.gz
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch, 2026-09
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install musl linker
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+
+      # The UI must be built first: rust-embed copies dist/ into the binary at compile time.
+      - name: Build frontend
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vite build
+
+      - name: Build kp2
+        working-directory: server
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          bin="server/target/${{ matrix.target }}/release/kp2"
+          "$bin" --version
+          tar -C "$(dirname "$bin")" -czf "$ARCHIVE" kp2
+          shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+          cat "$ARCHIVE.sha256"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ env.ARCHIVE }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "kp2 $TAG" \
+            --generate-notes \
+            $prerelease

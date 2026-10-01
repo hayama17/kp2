@@ -7,14 +7,20 @@ use crate::AppState;
 use axum::{
     Json,
     body::Bytes,
-    extract::{State, ws::{Message, WebSocket, WebSocketUpgrade}},
+    extract::{
+        State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use serde::Deserialize;
 use serde_json::json;
-use std::{io::{Read, Write}, sync::Arc};
+use std::{
+    io::{Read, Write},
+    sync::Arc,
+};
 use tokio::sync::mpsc;
 
 pub async fn token() -> Json<serde_json::Value> {
@@ -24,17 +30,28 @@ pub async fn token() -> Json<serde_json::Value> {
 /// Only pages served from this machine, or from an origin listed with --allowed-origin, may
 /// drive the terminal.
 fn origin_allowed(headers: &HeaderMap, allowed: &[String]) -> bool {
-    let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else { return true };
-    if allowed.iter().any(|a| a.trim().trim_end_matches('/').eq_ignore_ascii_case(origin)) {
+    let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    if allowed
+        .iter()
+        .any(|a| a.trim().trim_end_matches('/').eq_ignore_ascii_case(origin))
+    {
         return true;
     }
-    let host = origin.trim_start_matches("http://").trim_start_matches("https://");
+    let host = origin
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
     let host = host.split('/').next().unwrap_or("");
     let host = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade, headers: HeaderMap, State(state): State<Arc<AppState>>) -> Response {
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+) -> Response {
     if !origin_allowed(&headers, &state.allowed_origins) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
@@ -52,8 +69,12 @@ struct Hello {
     #[serde(default = "default_rows")]
     rows: u16,
 }
-fn default_cols() -> u16 { 80 }
-fn default_rows() -> u16 { 24 }
+fn default_cols() -> u16 {
+    80
+}
+fn default_rows() -> u16 {
+    24
+}
 
 fn shell() -> String {
     if let Ok(s) = std::env::var("SHELL")
@@ -79,14 +100,25 @@ fn frame(cmd: u8, payload: &[u8]) -> Message {
 async fn session(mut socket: WebSocket, state: Arc<AppState>) -> anyhow::Result<()> {
     // Handshake: the first frame carries the initial size.
     let hello: Hello = match socket.recv().await {
-        Some(Ok(Message::Text(t))) => serde_json::from_str(&t).unwrap_or(Hello { columns: 80, rows: 24 }),
-        Some(Ok(Message::Binary(b))) => serde_json::from_slice(&b).unwrap_or(Hello { columns: 80, rows: 24 }),
+        Some(Ok(Message::Text(t))) => serde_json::from_str(&t).unwrap_or(Hello {
+            columns: 80,
+            rows: 24,
+        }),
+        Some(Ok(Message::Binary(b))) => serde_json::from_slice(&b).unwrap_or(Hello {
+            columns: 80,
+            rows: 24,
+        }),
         _ => return Ok(()),
     };
 
     let shell = shell();
     let pty = native_pty_system();
-    let pair = pty.openpty(PtySize { rows: hello.rows, cols: hello.columns, pixel_width: 0, pixel_height: 0 })?;
+    let pair = pty.openpty(PtySize {
+        rows: hello.rows,
+        cols: hello.columns,
+        pixel_width: 0,
+        pixel_height: 0,
+    })?;
     let mut cmd = CommandBuilder::new(&shell);
     cmd.arg("-l");
     cmd.env("TERM", "xterm-256color");
@@ -114,7 +146,9 @@ async fn session(mut socket: WebSocket, state: Arc<AppState>) -> anyhow::Result<
         }
     });
 
-    socket.send(frame(b'1', format!("{shell} -l").as_bytes())).await?;
+    socket
+        .send(frame(b'1', format!("{shell} -l").as_bytes()))
+        .await?;
     socket.send(frame(b'2', b"{}")).await?;
 
     let mut paused = false;
@@ -170,14 +204,32 @@ mod tests {
 
     #[test]
     fn origin_check() {
-        let allowed = vec!["https://handson.example.com/".to_string(), " https://b.example.com".to_string()];
+        let allowed = vec![
+            "https://handson.example.com/".to_string(),
+            " https://b.example.com".to_string(),
+        ];
         assert!(origin_allowed(&HeaderMap::new(), &[]));
         assert!(origin_allowed(&with_origin("http://127.0.0.1:5173"), &[]));
         assert!(origin_allowed(&with_origin("http://localhost:5173"), &[]));
-        assert!(!origin_allowed(&with_origin("https://handson.example.com"), &[]));
-        assert!(origin_allowed(&with_origin("https://handson.example.com"), &allowed));
-        assert!(!origin_allowed(&with_origin("http://handson.example.com"), &allowed));
-        assert!(!origin_allowed(&with_origin("https://handson.example.com.evil.test"), &allowed));
-        assert!(origin_allowed(&with_origin("https://b.example.com"), &allowed));
+        assert!(!origin_allowed(
+            &with_origin("https://handson.example.com"),
+            &[]
+        ));
+        assert!(origin_allowed(
+            &with_origin("https://handson.example.com"),
+            &allowed
+        ));
+        assert!(!origin_allowed(
+            &with_origin("http://handson.example.com"),
+            &allowed
+        ));
+        assert!(!origin_allowed(
+            &with_origin("https://handson.example.com.evil.test"),
+            &allowed
+        ));
+        assert!(origin_allowed(
+            &with_origin("https://b.example.com"),
+            &allowed
+        ));
     }
 }
