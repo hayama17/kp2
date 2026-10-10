@@ -32,6 +32,12 @@ echo "edit me before running"
 echo "copy me"
 ```
 
+`{{NAME}}` のように二重の波括弧で囲った文字列は変数として扱われ、ブラウザ上でクリックして値を入力できます。同じ名前の変数はフォルダ内のすべての手順書で共有され、値を入れるまで Run と Insert は押せません。
+
+```sh
+echo {{TEST}}
+```
+
 `bash` / `sh` / `shell` 以外のコードブロックには Run ボタンは付きませんが、Copy は使えます。
 
 ```json

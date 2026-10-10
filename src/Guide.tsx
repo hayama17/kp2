@@ -1,8 +1,9 @@
-import { createContext, isValidElement, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { createContext, isValidElement, useContext, useEffect, useMemo, useState, type ComponentProps, type ReactNode, type SyntheticEvent } from 'react';
 import Markdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown';
 import { openInEditor, parseEditorLink } from './editor';
 import remarkGfm from 'remark-gfm';
 import remarkBr from './remark-br';
+import { missingVars, setVar, splitPlaceholders, substitute, useVars } from './vars';
 
 const RUNNABLE = new Set(['bash', 'sh', 'shell']);
 
@@ -12,6 +13,8 @@ interface Props {
   docName: string | null;
   /** All documents in the current folder; relative links to one of them switch documents. */
   names: string[];
+  /** Key under which `{{NAME}}` values are stored, normally the folder path. */
+  varsScope: string;
   onNavigate: (name: string) => void;
   onInsert: (command: string) => void;
   onRun: (command: string) => void;
@@ -43,16 +46,23 @@ type GuideContextValue = Omit<Props, 'markdown'>;
 const GuideContext = createContext<GuideContextValue>({
   docName: null,
   names: [],
+  varsScope: '',
   onNavigate: () => {},
   onInsert: () => {},
   onRun: () => {},
 });
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
-  const { onInsert, onRun } = useContext(GuideContext);
+  const { onInsert, onRun, varsScope } = useContext(GuideContext);
   const runnable = RUNNABLE.has(lang);
-  // The command shown is exactly the command sent: no hidden text, no transformation.
-  const command = code.replace(/\n$/, '');
+  const values = useVars(varsScope);
+  const segments = useMemo(() => splitPlaceholders(code.replace(/\n$/, '')), [code]);
+  // The command shown is exactly the command sent: placeholders are displayed with the same
+  // values that get substituted, and nothing else is transformed.
+  const command = substitute(code.replace(/\n$/, ''), values);
+  const missing = missingVars(command, values);
+  const blocked = missing.length > 0;
+  const blockedTitle = `Fill in ${missing.join(', ')} first`;
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -72,10 +82,20 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           </button>
           {runnable && (
             <>
-              <button className="btn-insert" title="Type into terminal (no Enter)" onClick={() => onInsert(command)}>
+              <button
+                className="btn-insert"
+                title={blocked ? blockedTitle : 'Type into terminal (no Enter)'}
+                disabled={blocked}
+                onClick={() => onInsert(command)}
+              >
                 Insert
               </button>
-              <button className="btn-run" title="Type into terminal and press Enter" onClick={() => onRun(command)}>
+              <button
+                className="btn-run"
+                title={blocked ? blockedTitle : 'Type into terminal and press Enter'}
+                disabled={blocked}
+                onClick={() => onRun(command)}
+              >
                 Run
               </button>
             </>
@@ -83,9 +103,9 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
         </span>
       </div>
       <pre
-        title={runnable ? 'Double-click to run' : undefined}
+        title={runnable ? (blocked ? blockedTitle : 'Double-click to run') : undefined}
         onDoubleClick={
-          runnable
+          runnable && !blocked
             ? () => {
                 window.getSelection()?.removeAllRanges(); // a double-click also selects a word; drop that
                 onRun(command);
@@ -93,9 +113,65 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
             : undefined
         }
       >
-        <code>{command}</code>
+        <code>
+          {segments.map((seg, i) =>
+            typeof seg === 'string' ? seg : <Placeholder key={i} name={seg.name} value={values[seg.name] ?? ''} scope={varsScope} />,
+          )}
+        </code>
       </pre>
     </div>
+  );
+}
+
+/**
+ * One `{{NAME}}` inside a code block. Shows the current value (or just the name when
+ * empty) and turns into a text field on click; Enter or leaving the field saves, Escape cancels.
+ */
+function Placeholder({ name, value, scope }: { name: string; value: string; scope: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const stop = (e: SyntheticEvent) => e.stopPropagation(); // keep double-click-to-run out of it
+  if (draft === null) {
+    return (
+      <span
+        className={`var${value ? ' var-set' : ' var-empty'}`}
+        role="button"
+        tabIndex={0}
+        title={`${name}: click to edit`}
+        onClick={() => setDraft(value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setDraft(value);
+          }
+        }}
+        onDoubleClick={stop}
+      >
+        {value || name}
+      </span>
+    );
+  }
+  const commit = () => {
+    setVar(scope, name, draft.trim());
+    setDraft(null);
+  };
+  return (
+    <input
+      className="var-input"
+      autoFocus
+      value={draft}
+      size={Math.max(draft.length, name.length + 4, 6)}
+      placeholder={name}
+      aria-label={name}
+      spellCheck={false}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        else if (e.key === 'Escape') setDraft(null);
+      }}
+      onDoubleClick={stop}
+      onClick={stop}
+    />
   );
 }
 
@@ -182,9 +258,9 @@ const urlTransform = (url: string) => (url.startsWith('vscode:') ? url : default
 
 const remarkPlugins = [remarkGfm, remarkBr];
 
-export function Guide({ markdown, docName, names, onNavigate, onInsert, onRun }: Props) {
+export function Guide({ markdown, docName, names, varsScope, onNavigate, onInsert, onRun }: Props) {
   return (
-    <GuideContext.Provider value={{ docName, names, onNavigate, onInsert, onRun }}>
+    <GuideContext.Provider value={{ docName, names, varsScope, onNavigate, onInsert, onRun }}>
       <article className="guide">
         <Markdown remarkPlugins={remarkPlugins} urlTransform={urlTransform} components={components}>
           {markdown}
