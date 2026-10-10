@@ -137,11 +137,20 @@ function GuideLink({ href = '', children, node: _node, ...rest }: ComponentProps
   }
   const target = resolveDocLink(docName, href);
   if (target !== null && !names.includes(target)) {
-    // A .md link inside the folder that does not exist: do not leave the app.
+    // A .md link that cannot be followed: either it leaves the folder (resolveDocLink reports
+    // the raw path, still containing "..") or the file is not in the folder. Keep the link text
+    // readable; the reason appears as a tooltip on hover (see .link-tip in styles.css).
+    const outside = target.split('/').includes('..');
+    const reason = outside ? 'outside folder' : 'not found';
     return (
-      <a {...rest} href={href} className="link-missing" title={`Not found in this folder: ${target}`} onClick={(e) => e.preventDefault()}>
-        {children}
-      </a>
+      <span className="link-missing-wrap">
+        <a {...rest} href={href} className="link-missing" onClick={(e) => e.preventDefault()}>
+          {children}
+        </a>
+        <span className="link-tip" role="tooltip">
+          {reason}: {target}
+        </span>
+      </span>
     );
   }
   if (target !== null) {

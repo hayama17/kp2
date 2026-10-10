@@ -3,6 +3,9 @@
   --fg: #1f2328;
   --border: #e4e7eb;
   --muted: #6b7480;
+  --warn-fg: #9a6700;
+  --warn-bg: #fff8c5;
+  --warn-border: #d4a72c;
   --hover: #f1f3f5;
   --code-bg: #f6f8fa;
   --accent: #1f883d;
@@ -40,7 +43,19 @@ html, body, #root { height: 100%; margin: 0; }
 .guide table { border-collapse: collapse; display: block; width: max-content; max-width: 100%; overflow-x: auto; }
 .guide th, .guide td { border: 1px solid var(--border); padding: 4px 10px; }
 .guide a { color: #0969da; }
-.guide a.link-missing { color: var(--muted); text-decoration: line-through; cursor: not-allowed; }
+/* A link to a runbook that cannot be followed: keep the text readable with a dotted underline in
+   the warning colour, and show the reason in a small tooltip only while hovered. */
+.guide a.link-missing { color: var(--warn-fg); text-decoration: underline dotted; text-underline-offset: 3px; cursor: not-allowed; }
+.guide .link-missing-wrap { position: relative; }
+.guide .link-tip {
+  display: none; position: absolute; left: 0; top: calc(100% + 4px); z-index: 10;
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  font-size: 0.78em; font-weight: 500; line-height: 1.6;
+  color: var(--warn-fg); background: var(--warn-bg); border: 1px solid var(--warn-border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.guide .link-missing-wrap:hover .link-tip { display: block; }
 
 .code-block { border: 1px solid var(--border); border-radius: 6px; margin: 12px 0; overflow: hidden; background: var(--code-bg); }
 .code-block-bar {
