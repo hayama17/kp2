@@ -73,6 +73,18 @@ html, body, #root { height: 100%; margin: 0; }
 .code-actions .btn-copy { min-width: 58px; color: var(--muted); }
 .code-actions .btn-run { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
 .code-block pre { margin: 0; padding: 12px; overflow-x: auto; }
+.code-actions button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+/* `{{NAME}}` placeholders inside a code block: click to type a value (see src/vars.ts). */
+.code-block .var {
+  border-radius: 3px; padding: 0 3px; margin: 0 -1px; cursor: text;
+  border: 1px dashed var(--warn-border); color: var(--warn-fg); background: var(--warn-bg);
+}
+.code-block .var-set { border-style: solid; border-color: #9ec5fe; color: #0550ae; background: #ddf4ff; }
+.code-block .var:hover, .code-block .var:focus-visible { filter: brightness(0.96); outline: none; }
+.code-block .var-input {
+  font: inherit; color: #0550ae; background: #fff; border: 1px solid #0969da; border-radius: 3px;
+  padding: 0 3px; margin: -1px -1px; outline: none; box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.25);
+}
 
 /* Terminal */
 .terminal-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
