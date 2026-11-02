@@ -1,6 +1,6 @@
 [package]
 name = "kp2"
-version = "0.1.1-hayama.2"
+version = "0.1.1-hayama.3"
 edition = "2024"
 
 [dependencies]
