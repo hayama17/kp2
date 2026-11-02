@@ -125,6 +125,7 @@ Relative links inside Markdown (`[Next](./ops/backup.md)`, `[Back](../intro.md)`
 Links that leave the folder or point to a missing file are shown with a strikethrough and do nothing when clicked. `http(s)://` links open in a new tab.
 
 GitHub-style alerts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`) are rendered as coloured callouts.
+` ```mermaid ` code blocks are drawn as [Mermaid](https://mermaid.js.org/) diagrams. On a syntax error the source is shown along with the error message.
 
 The server only serves `.md` files under the chosen directory; `..` and similar tricks cannot escape it.
 
